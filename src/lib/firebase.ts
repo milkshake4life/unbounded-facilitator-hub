@@ -35,4 +35,3 @@ if (isFirebaseConfigured) {
 
 export const auth = authInstance;
 export const db = dbInstance;
-export { app };

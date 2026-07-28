@@ -25,6 +25,15 @@ export type ShortNotice = "Yes" | "No" | "Maybe";
 
 export type FacilitatorStatus = "active" | "archived";
 
+/** Someone allowed to sign in and use the Facilitator Hub. */
+export interface AllowedUser {
+  email: string;
+  displayName: string | null;
+  /** Email of the person who granted access, or null for bootstrap admins. */
+  grantedBy: string | null;
+  grantedAt: number;
+}
+
 export interface Facilitator {
   id: string;
 
@@ -97,16 +106,6 @@ export const SHIRT_SIZES: ShirtSize[] = [
   "XL",
   "XXL",
   "XXXL",
-];
-
-export const OTHER_PROGRAMS: string[] = [
-  "Cohorts",
-  "GLEAM® Inventory / Learning Walks",
-  "Math Identity Leadership Accelerator™ (MILA)",
-  "Math Leadership Collaborative (MLC)",
-  "Curriculum Adoption",
-  "Curriculum Implementation",
-  "OL&LA",
 ];
 
 export const AVAILABILITY_OPTIONS: Availability[] = [

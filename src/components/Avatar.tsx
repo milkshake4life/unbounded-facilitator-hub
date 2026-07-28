@@ -12,10 +12,8 @@ interface AvatarProps {
 }
 
 /**
- * Renders a facilitator headshot with a graceful fallback. Headshots are often
- * public Google Drive links that can fail to load (or be missing entirely);
- * in either case we show a simple default profile icon instead of a broken
- * image.
+ * Renders a facilitator headshot with a graceful fallback. Missing or broken
+ * image URLs fall back to a simple profile icon.
  */
 export function Avatar({ src, alt, boxClassName, iconClassName }: AvatarProps) {
   const [error, setError] = useState(false);

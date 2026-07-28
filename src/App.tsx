@@ -8,7 +8,6 @@ import {
   Users,
   ChevronRight,
   Check,
-  LogOut,
   Image as ImageIcon,
 } from "lucide-react";
 import { Sidebar, type DirectoryView } from "./components/Sidebar";
@@ -18,11 +17,14 @@ import { FacilitatorFormModal } from "./components/FacilitatorFormModal";
 import { ImportWizardModal } from "./components/ImportWizardModal";
 import { HeadshotImportModal } from "./components/HeadshotImportModal";
 import { SignInScreen } from "./components/SignInScreen";
+import { AccessDeniedScreen } from "./components/AccessDeniedScreen";
+import { ManageAccessModal } from "./components/ManageAccessModal";
 import { facilitators as seedData } from "./data/facilitators";
 import type { Facilitator, Pathway } from "./types";
 import { PATHWAYS } from "./types";
 import { classNames } from "./lib/ui";
 import { useAuth } from "./lib/useAuth";
+import { useAccess } from "./lib/useAccess";
 import {
   subscribeFacilitators,
   saveFacilitator,
@@ -41,6 +43,7 @@ const sortLabels: Record<SortKey, string> = {
 
 export default function App() {
   const { user, loading, configured, signIn, signOut } = useAuth();
+  const { status: access, error: accessError } = useAccess(user, configured);
 
   // In "demo mode" (Firebase not configured) fall back to the in-memory sample
   // data so the app still runs before setup is finished. When configured, data
@@ -60,10 +63,10 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importingHeadshots, setImportingHeadshots] = useState(false);
+  const [managingAccess, setManagingAccess] = useState(false);
 
-  // Persist to Firestore only when configured and signed in; otherwise keep
-  // everything local to the browser session.
-  const persist = configured && !!user;
+  // Persist to Firestore only when configured, signed in, and allowlisted.
+  const persist = configured && !!user && access === "allowed";
 
   useEffect(() => {
     if (!persist) return;
@@ -170,8 +173,8 @@ export default function App() {
     }
   }
 
-  // Auth gate: when Firebase is configured, require Google sign-in.
-  if (configured && loading) {
+  // Auth + allowlist gates when Firebase is configured.
+  if (configured && (loading || (user && access === "loading"))) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
         Loading…
@@ -181,10 +184,31 @@ export default function App() {
   if (configured && !user) {
     return <SignInScreen onSignIn={signIn} />;
   }
+  if (configured && user && access === "denied") {
+    return (
+      <AccessDeniedScreen
+        user={user}
+        onSignOut={signOut}
+        error={accessError}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeView={view} onViewChange={(v) => { setView(v); resetPage(); }} counts={counts} />
+      <Sidebar
+        activeView={view}
+        onViewChange={(v) => {
+          setView(v);
+          resetPage();
+        }}
+        counts={counts}
+        user={user}
+        onSignOut={configured ? () => void signOut() : undefined}
+        onManageAccess={
+          configured && user ? () => setManagingAccess(true) : undefined
+        }
+      />
 
       <main className="flex min-w-0 flex-1 flex-col">
         {/* Top header */}
@@ -205,16 +229,6 @@ export default function App() {
               <Plus className="h-4 w-4" />
               Add Facilitator
             </button>
-            {configured && user && (
-              <button
-                onClick={() => signOut()}
-                title={`Signed in as ${user.email ?? ""} — sign out`}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
-            )}
           </div>
         </header>
 
@@ -429,6 +443,12 @@ export default function App() {
         <HeadshotImportModal
           facilitators={data}
           onClose={() => setImportingHeadshots(false)}
+        />
+      )}
+      {managingAccess && user?.email && (
+        <ManageAccessModal
+          currentUserEmail={user.email}
+          onClose={() => setManagingAccess(false)}
         />
       )}
     </div>

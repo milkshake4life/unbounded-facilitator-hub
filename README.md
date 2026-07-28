@@ -25,6 +25,8 @@ contact info, availability, gear, and more).
 - **Archived** view for facilitators no longer active.
 - **Pagination** for large directories.
 - **Google sign-in** gates access when Firebase is configured.
+- **Email allowlist** — only invited emails can use the app; any allowlisted
+  user can invite or revoke others from the sidebar profile menu.
 - **Import from Google Sheets** — pick a sheet from the Google Picker, map
   columns to fields, and import with a **merge (by email)** or **replace**
   strategy into a shared Firestore database.
@@ -81,6 +83,8 @@ src/
   lib/
     firebase.ts                  # Firebase app init (Auth + Firestore)
     useAuth.ts                   # Google sign-in hook
+    useAccess.ts                 # allowlist gate after sign-in
+    accessService.ts             # allowedUsers Firestore CRUD
     facilitatorsService.ts       # Firestore CRUD + import + headshot storage
     googleSheets.ts              # Google token, Picker, Sheets + Drive reads
     importMapping.ts             # sheet header -> field mapping + row parsing
@@ -89,15 +93,20 @@ src/
     useHeadshot.ts               # lazy-load + cache stored headshots
     ui.ts                        # shared UI helpers (chip colors, classNames)
   components/
-    Sidebar.tsx                  # left navigation
+    Sidebar.tsx                  # left navigation + signed-in profile menu
     FacilitatorCard.tsx          # directory card w/ view/edit/delete menu
     FacilitatorModal.tsx         # facilitator detail view
     FacilitatorFormModal.tsx     # add / edit facilitator form
     ImportWizardModal.tsx        # Google Sheets import wizard
     HeadshotImportModal.tsx      # Drive headshot import wizard
+    ManageAccessModal.tsx        # invite / revoke allowlisted emails
     SignInScreen.tsx             # Google sign-in screen
+    AccessDeniedScreen.tsx       # signed in but not allowlisted
     Avatar.tsx                   # headshot with graceful fallback
 ```
+
+`firestore.rules` at the repo root is the recommended security rules (allowlist-
+gated). Publish them in the Firebase console as described in the setup guide.
 
 ## Roadmap
 

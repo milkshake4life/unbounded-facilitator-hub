@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null;
+    }
+
+    function emailKey() {
+      return request.auth.token.email.lower();
+    }
+
+    function isAllowed() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/allowedUsers/$(emailKey()));
+    }
+
+    // Must match VITE_BOOTSTRAP_ALLOWLIST in .env.local.
+    function isBootstrapEmail() {
+      return emailKey() in ['ethan.lee@unbounded.org'];
+    }
+
+    // Pass the path wildcard in — helpers outside the match block cannot see it.
+    function isAllowedUserDoc(docEmail) {
+      return request.resource.data.keys().hasOnly([
+          'email', 'displayName', 'grantedBy', 'grantedAt'
+        ])
+        && request.resource.data.email is string
+        && request.resource.data.email == request.resource.data.email.lower()
+        && request.resource.data.email == docEmail
+        && (request.resource.data.displayName == null
+            || request.resource.data.displayName is string)
+        && (request.resource.data.grantedBy == null
+            || request.resource.data.grantedBy is string)
+        && (request.resource.data.grantedAt is int
+            || request.resource.data.grantedAt is float);
+    }
+
+    match /allowedUsers/{email} {
+      allow get: if signedIn() && (email == emailKey() || isAllowed());
+      allow list: if isAllowed();
+
+      allow create: if isAllowedUserDoc(email) && (
+        isAllowed()
+        || (isBootstrapEmail() && request.resource.data.grantedBy == null)
+      );
+      allow update: if isAllowed() && isAllowedUserDoc(email);
+      allow delete: if isAllowed() && email != emailKey();
+    }
+
+    match /facilitators/{doc} {
+      allow read, write: if isAllowed();
+    }
+
+    match /headshots/{doc} {
+      allow read, write: if isAllowed();
+    }
+  }
+}

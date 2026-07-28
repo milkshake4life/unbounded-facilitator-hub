@@ -35,23 +35,29 @@ free-tier friendly.
 
 ### Firestore security rules
 
-In **Firestore → Rules**, restrict access to signed-in users, then **Publish**:
+Copy the contents of `firestore.rules` from this repo into
+**Firestore → Rules**, then **Publish**. Those rules:
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /facilitators/{doc} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+- Allow only emails in the `allowedUsers` collection to read/write
+  facilitators and headshots.
+- Let any allowlisted user invite or revoke others.
+- Let bootstrap emails (listed in `isBootstrapEmail()`) seed the allowlist
+  on first sign-in.
 
-> This lets any signed-in Google user read/write. To lock it to your
-> organization only, add a check on `request.auth.token.email` domain, or use
-> Firebase Auth's authorized-domains + a Workspace-internal OAuth consent
-> screen (Step 3).
+Edit `isBootstrapEmail()` in the rules to include your admin email(s), and put
+the same addresses in `VITE_BOOTSTRAP_ALLOWLIST` in `.env.local` (comma-
+separated). After the first successful sign-in, use **Manage access** in the
+sidebar profile menu to invite colleagues.
+
+Alternatively, skip bootstrap and manually create a document in Firestore:
+
+- Collection: `allowedUsers`
+- Document ID: your email in lowercase (e.g. `you@unbounded.org`)
+- Fields: `email` (string), `displayName` (null), `grantedBy` (null),
+  `grantedAt` (number, e.g. `Date.now()`)
+
+> Without an allowlist entry (or bootstrap), signed-in users see an
+> “Access not granted” screen and cannot open the directory.
 
 ---
 

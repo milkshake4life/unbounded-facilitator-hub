@@ -12,7 +12,7 @@ const SCOPES =
 
 export const isGoogleConfigured = Boolean(CLIENT_ID && API_KEY);
 
-export interface PickedSpreadsheet {
+interface PickedSpreadsheet {
   id: string;
   name: string;
 }
@@ -188,7 +188,7 @@ export interface PickedFolder {
   name: string;
 }
 
-export interface DriveImage {
+interface DriveImage {
   id: string;
   name: string;
 }
