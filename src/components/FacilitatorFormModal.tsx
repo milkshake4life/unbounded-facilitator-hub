@@ -116,6 +116,10 @@ export function FacilitatorFormModal({
       districtRelationships: districtRelationships.trim(),
       resumeFileName: initial?.resumeFileName,
       bio: bio.trim(),
+      bioGeneratedByAi:
+        bio.trim() !== "" &&
+        bio.trim() === (initial?.bio ?? "").trim() &&
+        Boolean(initial?.bioGeneratedByAi),
       headshot: headshot.trim(),
       status: initial?.status ?? "active",
       joinedDate: initial?.joinedDate ?? new Date().toISOString().slice(0, 10),
@@ -333,11 +337,12 @@ export function FacilitatorFormModal({
             />
           </Field>
 
-          <Field label="Bio">
+          <Field label="Biography">
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
+              placeholder="Optional — leave blank to generate with AI from the profile"
               className={inputClass}
             />
           </Field>

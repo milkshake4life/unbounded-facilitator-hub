@@ -18,32 +18,39 @@ import {
   Minus,
   Pencil,
   Download,
+  Sparkles,
+  Loader2,
+  Wand2,
 } from "lucide-react";
 import type { Facilitator, GradeBand } from "../types";
 import { COMFORT_LABELS, STANDARDS_INSTITUTE_LABELS } from "../types";
 import { classNames, comfortStyles, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
+import { generateFacilitatorBio, isBioAiConfigured } from "../lib/generateBio";
 import { Avatar } from "./Avatar";
 
 interface FacilitatorModalProps {
   facilitator: Facilitator;
   onClose: () => void;
   onEdit: (f: Facilitator) => void;
+  /** Persist an updated facilitator without closing the profile modal. */
+  onUpdate: (f: Facilitator) => void;
 }
 
-type TabId = "experience" | "availability" | "professional" | "contact";
+type TabId = "experience" | "professional" | "bio" | "contact";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "experience", label: "UnboundEd Experience" },
-  { id: "availability", label: "Availability" },
   { id: "professional", label: "Professional" },
-  { id: "contact", label: "Contact & Gear" },
+  { id: "bio", label: "Biography" },
+  { id: "contact", label: "Contact & Availability" },
 ];
 
 export function FacilitatorModal({
   facilitator,
   onClose,
   onEdit,
+  onUpdate,
 }: FacilitatorModalProps) {
   const [tab, setTab] = useState<TabId>("experience");
   const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
@@ -124,12 +131,6 @@ export function FacilitatorModal({
               </button>
             </div>
           </div>
-
-          {facilitator.bio && (
-            <p className="mt-4 text-sm leading-relaxed text-slate-600">
-              {facilitator.bio}
-            </p>
-          )}
         </div>
 
         {/* Tabs */}
@@ -156,9 +157,11 @@ export function FacilitatorModal({
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {tab === "experience" && <ExperienceTab f={facilitator} />}
-          {tab === "availability" && <AvailabilityTab f={facilitator} />}
           {tab === "professional" && <ProfessionalTab f={facilitator} />}
-          {tab === "contact" && <ContactTab f={facilitator} />}
+          {tab === "bio" && (
+            <BioTab f={facilitator} onUpdate={onUpdate} />
+          )}
+          {tab === "contact" && <ContactAvailabilityTab f={facilitator} />}
         </div>
       </div>
     </div>
@@ -269,38 +272,92 @@ function ExperienceTab({ f }: { f: Facilitator }) {
   );
 }
 
-function AvailabilityTab({ f }: { f: Facilitator }) {
-  return (
-    <div className="space-y-6">
-      <Section
-        icon={<CalendarClock className="h-4 w-4" />}
-        title="Typical availability"
-      >
-        <p className="text-sm text-slate-700">
-          {f.availability === "Other" && f.availabilityOther
-            ? f.availabilityOther
-            : f.availability}
-        </p>
-      </Section>
+function BioTab({
+  f,
+  onUpdate,
+}: {
+  f: Facilitator;
+  onUpdate: (f: Facilitator) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasBio = Boolean(f.bio?.trim());
 
-      <Section icon={<Zap className="h-4 w-4" />} title="Available on short notice">
-        <span
-          className={classNames(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
-            f.availableShortNotice === "Yes"
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
-              : f.availableShortNotice === "Maybe"
-                ? "bg-amber-50 text-amber-700 ring-amber-600/20"
-                : "bg-slate-100 text-slate-500 ring-slate-500/20"
-          )}
-        >
-          {f.availableShortNotice}
-        </span>
-        <p className="mt-2 text-xs italic text-slate-400">
-          Sometimes events get booked with a short lead time, or changes require
-          another facilitator.
+  async function handleGenerate() {
+    setError(null);
+    setBusy(true);
+    try {
+      const bio = await generateFacilitatorBio(f);
+      onUpdate({ ...f, bio, bioGeneratedByAi: isBioAiConfigured() });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {f.bioGeneratedByAi && hasBio && (
+        <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-600/15">
+          <Sparkles className="h-3.5 w-3.5" />
+          Auto-generated with AI
+        </div>
+      )}
+
+      {hasBio ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+          {f.bio}
         </p>
-      </Section>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+          <p className="text-sm font-medium text-slate-700">
+            No biography yet
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            Bios are optional on the intake form — if left blank, we can create
+            one with AI for district submissions.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 disabled:opacity-60"
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Wand2 className="h-4 w-4" />
+          )}
+          {busy
+            ? "Generating…"
+            : hasBio
+              ? "Regenerate with AI"
+              : "Generate with AI"}
+        </button>
+        {hasBio && !f.bioGeneratedByAi && (
+          <p className="text-xs text-slate-400">
+            Provided by the facilitator
+          </p>
+        )}
+        {!isBioAiConfigured() && (
+          <p className="w-full text-xs text-amber-700">
+            Add <code className="rounded bg-amber-50 px-1">VITE_GEMINI_API_KEY</code> to{" "}
+            <code className="rounded bg-amber-50 px-1">.env.local</code> and restart
+            the dev server for real AI bios (see SETUP Step 5b).
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -350,58 +407,95 @@ function ProfessionalTab({ f }: { f: Facilitator }) {
   );
 }
 
-function ContactTab({ f }: { f: Facilitator }) {
+function ContactAvailabilityTab({ f }: { f: Facilitator }) {
   return (
-    <div className="space-y-5">
-      <DetailRow
-        icon={<Mail className="h-4 w-4" />}
-        label="UnboundEd email"
-        value={
-          <a
-            href={`mailto:${f.unboundedEmail}`}
-            className="text-brand-700 hover:underline"
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <DetailRow
+          icon={<Mail className="h-4 w-4" />}
+          label="UnboundEd email"
+          value={
+            <a
+              href={`mailto:${f.unboundedEmail}`}
+              className="text-brand-700 hover:underline"
+            >
+              {f.unboundedEmail}
+            </a>
+          }
+        />
+        <DetailRow
+          icon={<Mail className="h-4 w-4" />}
+          label="Personal email"
+          value={
+            <a
+              href={`mailto:${f.personalEmail}`}
+              className="text-brand-700 hover:underline"
+            >
+              {f.personalEmail}
+            </a>
+          }
+        />
+        <DetailRow
+          icon={<Phone className="h-4 w-4" />}
+          label="Cell phone"
+          value={f.cellPhone}
+        />
+        <DetailRow
+          icon={<Home className="h-4 w-4" />}
+          label="Address"
+          value={`${f.streetAddress}, ${f.city}, ${f.state} ${f.zipCode}`}
+        />
+        <DetailRow
+          icon={<ShieldAlert className="h-4 w-4" />}
+          label="Emergency contact"
+          value={`${f.emergencyContactName} · ${f.emergencyContactNumber}`}
+        />
+      </div>
+
+      <div className="space-y-6 border-t border-slate-100 pt-5">
+        <Section
+          icon={<CalendarClock className="h-4 w-4" />}
+          title="Typical availability"
+        >
+          <p className="text-sm text-slate-700">
+            {f.availability === "Other" && f.availabilityOther
+              ? f.availabilityOther
+              : f.availability}
+          </p>
+        </Section>
+
+        <Section icon={<Zap className="h-4 w-4" />} title="Available on short notice">
+          <span
+            className={classNames(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
+              f.availableShortNotice === "Yes"
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+                : f.availableShortNotice === "Maybe"
+                  ? "bg-amber-50 text-amber-700 ring-amber-600/20"
+                  : "bg-slate-100 text-slate-500 ring-slate-500/20"
+            )}
           >
-            {f.unboundedEmail}
-          </a>
-        }
-      />
-      <DetailRow
-        icon={<Mail className="h-4 w-4" />}
-        label="Personal email"
-        value={
-          <a
-            href={`mailto:${f.personalEmail}`}
-            className="text-brand-700 hover:underline"
-          >
-            {f.personalEmail}
-          </a>
-        }
-      />
-      <DetailRow
-        icon={<Phone className="h-4 w-4" />}
-        label="Cell phone"
-        value={f.cellPhone}
-      />
-      <DetailRow
-        icon={<Home className="h-4 w-4" />}
-        label="Address"
-        value={`${f.streetAddress}, ${f.city}, ${f.state} ${f.zipCode}`}
-      />
-      <DetailRow
-        icon={<ShieldAlert className="h-4 w-4" />}
-        label="Emergency contact"
-        value={`${f.emergencyContactName} · ${f.emergencyContactNumber}`}
-      />
-      <DetailRow
-        icon={<Shirt className="h-4 w-4" />}
-        label="UnboundEd gear"
-        value={
-          <>
-            {f.hasPolo ? "Has polo" : "Needs polo"} · {f.poloStyle} · Size{" "}
-            {f.shirtSize}
-          </>
-        }
-      />
+            {f.availableShortNotice}
+          </span>
+          <p className="mt-2 text-xs italic text-slate-400">
+            Sometimes events get booked with a short lead time, or changes require
+            another facilitator.
+          </p>
+        </Section>
+      </div>
+
+      <div className="border-t border-slate-100 pt-5">
+        <DetailRow
+          icon={<Shirt className="h-4 w-4" />}
+          label="UnboundEd gear"
+          value={
+            <>
+              {f.hasPolo ? "Has polo" : "Needs polo"} · {f.poloStyle} · Size{" "}
+              {f.shirtSize}
+            </>
+          }
+        />
+      </div>
     </div>
   );
 }

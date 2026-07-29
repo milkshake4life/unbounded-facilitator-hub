@@ -153,6 +153,48 @@ service cloud.firestore {
 
 ---
 
+## Step 5b — AI biographies (optional, one-time)
+
+The **Biography** tab can generate a district-facing bio with Gemini when the
+intake form left that field blank.
+
+1. Make sure you already completed Firebase AI Logic setup once
+   ([Firebase console](https://console.firebase.google.com) → **Build → AI** →
+   **Get started** → **Gemini Developer API**). That creates a Gemini key in
+   your Google Cloud project.
+2. Open **Google Cloud credentials** for the **same** project:
+   <https://console.cloud.google.com/apis/credentials>
+   (confirm the project picker at the top matches your Firebase project).
+3. Under **API keys**, open
+   **Gemini Developer API key (auto created by Firebase)**
+   (or create a new API key if you don’t see that one).
+4. Click **Show key** / copy the key value.
+5. Add it to `.env.local`:
+   ```bash
+   VITE_GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+6. **Restart** the dev server (`npm run dev`) so Vite picks up the new var.
+7. (Recommended) On that same credentials page, under **API restrictions**:
+   - Choose **Restrict key**
+   - Select **Gemini API** (this is the Developer API behind
+     `generativelanguage.googleapis.com`; older consoles called it
+     “Generative Language API”)
+   - Do **not** select “Gemini for Google Cloud API” — that is Vertex/Agent
+     Platform and will block biography generation
+   - Under **Application restrictions**, you can leave **None** for now, or
+     set **HTTP referrers** to `http://localhost:5173/*` (and your deployed
+     origin later)
+   - Click **Save** (changes can take up to ~5 minutes)
+
+Without `VITE_GEMINI_API_KEY`, Generate still works in demo mode via a simple
+template bio (not true AI).
+
+> Note: Firebase AI Logic also enforces App Check on its client SDKs. This app
+> calls the Gemini Developer API directly with your key instead, which is
+> simpler for localhost and internal use.
+
+---
+
 ## Step 6 — Use it
 
 **Import facilitator data:**
@@ -178,10 +220,18 @@ service cloud.firestore {
 
 - **First row must be headers.** The importer reads the first tab; row 1 is
   treated as column names, and auto-mapping matches on those names.
-- **Multi-value cells** (pathways, grade bands) can be separated by commas,
-  semicolons, slashes, or new lines — e.g. `Math, Leadership`.
+- **Multi-value cells** (pathways, grade bands, other programs) can be
+  separated by commas, semicolons, or new lines — e.g. `Math, Leadership`.
+  (Slashes are kept for program names like `GLEAM® Inventory / Learning Walks`.)
+- **Comfort / grade bands:** Google Forms grid columns like
+  `… [K-5]`, `… [6-8]` with cells `I nerd out for this!` / `This is fine.` /
+  `I do not want to facilitate this.` are auto-detected. You can also map a
+  single “Grade bands” list column.
+- **Standards Institute:** cells with `National`, `Local`, both, or empty/`No`
+  map to national / local / both / no.
 - **Merge matches on email** (`unboundedEmail`, falling back to
   `personalEmail`). Rows without an email are always added as new records.
+  Only mapped columns overwrite existing values on merge.
 - **Replace is destructive** — it deletes all existing records first. The
   wizard makes you pick this explicitly.
 - **Headshot matching is by filename** and tolerant of inconsistent names

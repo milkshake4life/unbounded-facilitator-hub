@@ -115,11 +115,14 @@ export async function replaceAllFacilitators(
 
 /**
  * MERGE strategy: match incoming rows to existing records by email. Existing
- * matches are updated in place (keeping their id + fields not present in the
- * import); unmatched rows are added as new records.
+ * matches are updated in place (keeping their id). When `overlayKeys` is
+ * provided, only those Facilitator fields are overwritten — so unmapped import
+ * columns (emergency contact, comfort, etc.) do not wipe stored values with
+ * empty defaults. Unmatched rows are added as new records.
  */
 export async function mergeFacilitatorsByEmail(
-  incoming: Facilitator[]
+  incoming: Facilitator[],
+  overlayKeys?: (keyof Facilitator)[]
 ): Promise<{ added: number; updated: number }> {
   if (!db) throw new Error("Firestore is not configured.");
   const existingSnap = await getDocs(collection(db, COLLECTION));
@@ -133,13 +136,21 @@ export async function mergeFacilitatorsByEmail(
   let added = 0;
   let updated = 0;
   const writes: Facilitator[] = [];
+  const keys = overlayKeys?.length ? overlayKeys : null;
 
   for (const inc of incoming) {
     const key = emailKey(inc);
     const match = key ? byEmail.get(key) : undefined;
     if (match) {
-      // Keep the existing id; overlay imported fields onto the stored record.
-      writes.push({ ...match, ...inc, id: match.id });
+      if (keys) {
+        const next: Facilitator = { ...match, id: match.id };
+        for (const k of keys) {
+          Object.assign(next, { [k]: inc[k] });
+        }
+        writes.push(next);
+      } else {
+        writes.push({ ...match, ...inc, id: match.id });
+      }
       updated += 1;
     } else {
       writes.push(inc);

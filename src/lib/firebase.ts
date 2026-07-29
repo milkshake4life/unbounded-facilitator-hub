@@ -23,15 +23,16 @@ export const isFirebaseConfigured = Boolean(
     firebaseConfig.appId
 );
 
-let app: FirebaseApp | null = null;
+let appInstance: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
 let dbInstance: Firestore | null = null;
 
 if (isFirebaseConfigured) {
-  app = initializeApp(firebaseConfig);
-  authInstance = getAuth(app);
-  dbInstance = getFirestore(app);
+  appInstance = initializeApp(firebaseConfig);
+  authInstance = getAuth(appInstance);
+  dbInstance = getFirestore(appInstance);
 }
 
+export const app = appInstance;
 export const auth = authInstance;
 export const db = dbInstance;

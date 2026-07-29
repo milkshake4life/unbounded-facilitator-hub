@@ -78,6 +78,8 @@ export interface Facilitator {
 
   // Bio & media
   bio: string;
+  /** True when `bio` was produced by the in-app AI generator (not user-written). */
+  bioGeneratedByAi?: boolean;
   headshot: string;
   /** True when a photo has been uploaded to the `headshots` Firestore collection. */
   hasStoredHeadshot?: boolean;

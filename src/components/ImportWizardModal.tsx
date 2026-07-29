@@ -100,7 +100,7 @@ export function ImportWizardModal({ onClose }: ImportWizardModalProps) {
           `Replaced the directory: ${r.added} imported, ${r.deleted} previous record(s) removed.`
         );
       } else {
-        const r = await mergeFacilitatorsByEmail(build.records);
+        const r = await mergeFacilitatorsByEmail(build.records, build.overlayKeys);
         setResult(
           `Merge complete: ${r.updated} updated, ${r.added} added (matched by email).`
         );

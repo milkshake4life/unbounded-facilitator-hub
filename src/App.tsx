@@ -158,6 +158,18 @@ export default function App() {
     setViewing(null);
   }
 
+  /** Update a facilitator (e.g. AI bio) while keeping the profile modal open. */
+  function handleUpdate(f: Facilitator) {
+    if (persist) {
+      saveFacilitator(f).catch((err) =>
+        window.alert(`Could not save: ${err.message}`)
+      );
+    } else {
+      setData((prev) => prev.map((x) => (x.id === f.id ? f : x)));
+    }
+    setViewing(f);
+  }
+
   function handleDelete(f: Facilitator) {
     if (
       !window.confirm(`Remove ${f.firstName} ${f.lastName} from the directory?`)
@@ -439,6 +451,7 @@ export default function App() {
             setViewing(null);
             setEditing(f);
           }}
+          onUpdate={handleUpdate}
         />
       )}
       {(editing || adding) && (

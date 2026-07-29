@@ -53,6 +53,7 @@ function make(
     districtRelationships: "",
     resumeFileName: `${p.firstName}_${p.lastName}_Resume.pdf`,
     bio: "",
+    bioGeneratedByAi: false,
     headshot: p.headshot,
     status: "active",
     joinedDate: "2021-01-01",
