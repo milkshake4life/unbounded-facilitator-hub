@@ -173,6 +173,18 @@ export default function App() {
     }
   }
 
+  function handleArchive(f: Facilitator) {
+    const nextStatus = f.status === "archived" ? "active" : "archived";
+    const updated: Facilitator = { ...f, status: nextStatus };
+    if (persist) {
+      saveFacilitator(updated).catch((err) =>
+        window.alert(`Could not update: ${err.message}`)
+      );
+    } else {
+      setData((prev) => prev.map((x) => (x.id === f.id ? updated : x)));
+    }
+  }
+
   // Auth + allowlist gates when Firebase is configured.
   if (configured && (loading || (user && access === "loading"))) {
     return (
@@ -373,6 +385,7 @@ export default function App() {
                   facilitator={f}
                   onView={setViewing}
                   onEdit={setEditing}
+                  onArchive={handleArchive}
                   onDelete={handleDelete}
                 />
               ))}

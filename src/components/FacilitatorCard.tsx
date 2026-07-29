@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Eye, Pencil, Trash2, MapPin } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  MapPin,
+  Archive,
+  ArchiveRestore,
+} from "lucide-react";
 import type { Facilitator } from "../types";
 import { classNames, pathwayShortLabels, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
@@ -9,6 +16,7 @@ interface FacilitatorCardProps {
   facilitator: Facilitator;
   onView: (f: Facilitator) => void;
   onEdit: (f: Facilitator) => void;
+  onArchive: (f: Facilitator) => void;
   onDelete: (f: Facilitator) => void;
 }
 
@@ -16,10 +24,12 @@ export function FacilitatorCard({
   facilitator,
   onView,
   onEdit,
+  onArchive,
   onDelete,
 }: FacilitatorCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isArchived = facilitator.status === "archived";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -57,16 +67,7 @@ export function FacilitatorCard({
           <MoreHorizontal className="h-5 w-5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-            <MenuButton
-              icon={<Eye className="h-4 w-4" />}
-              label="View"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onView(facilitator);
-              }}
-            />
+          <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
             <MenuButton
               icon={<Pencil className="h-4 w-4" />}
               label="Edit"
@@ -74,6 +75,21 @@ export function FacilitatorCard({
                 e.stopPropagation();
                 setMenuOpen(false);
                 onEdit(facilitator);
+              }}
+            />
+            <MenuButton
+              icon={
+                isArchived ? (
+                  <ArchiveRestore className="h-4 w-4" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )
+              }
+              label={isArchived ? "Restore" : "Archive"}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onArchive(facilitator);
               }}
             />
             <MenuButton
