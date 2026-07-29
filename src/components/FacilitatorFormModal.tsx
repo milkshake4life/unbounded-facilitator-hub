@@ -115,12 +115,15 @@ export function FacilitatorFormModal({
       roleDescription: roleDescription.trim(),
       districtRelationships: districtRelationships.trim(),
       resumeFileName: initial?.resumeFileName,
+      resumeDriveFileId: initial?.resumeDriveFileId,
+      hasStoredResume: initial?.hasStoredResume,
       bio: bio.trim(),
       bioGeneratedByAi:
         bio.trim() !== "" &&
         bio.trim() === (initial?.bio ?? "").trim() &&
         Boolean(initial?.bioGeneratedByAi),
       headshot: headshot.trim(),
+      hasStoredHeadshot: initial?.hasStoredHeadshot,
       status: initial?.status ?? "active",
       joinedDate: initial?.joinedDate ?? new Date().toISOString().slice(0, 10),
     };

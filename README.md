@@ -85,10 +85,10 @@ src/
     useAuth.ts                   # Google sign-in hook
     useAccess.ts                 # allowlist gate after sign-in
     accessService.ts             # allowedUsers Firestore CRUD
-    facilitatorsService.ts       # Firestore CRUD + import + headshot storage
+    facilitatorsService.ts       # Firestore CRUD + import + headshot/resume
     googleSheets.ts              # Google token, Picker, Sheets + Drive reads
     importMapping.ts             # sheet header -> field mapping + row parsing
-    headshotMatch.ts             # match photo filenames to facilitators
+    headshotMatch.ts             # match photo/resume filenames to facilitators
     image.ts                     # client-side image compression
     useHeadshot.ts               # lazy-load + cache stored headshots
     ui.ts                        # shared UI helpers (chip colors, classNames)
@@ -99,6 +99,7 @@ src/
     FacilitatorFormModal.tsx     # add / edit facilitator form
     ImportWizardModal.tsx        # Google Sheets import wizard
     HeadshotImportModal.tsx      # Drive headshot import wizard
+    ResumeImportModal.tsx        # Drive resume import wizard
     ManageAccessModal.tsx        # invite / revoke allowlisted emails
     SignInScreen.tsx             # Google sign-in screen
     AccessDeniedScreen.tsx       # signed in but not allowlisted

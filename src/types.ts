@@ -75,6 +75,10 @@ export interface Facilitator {
   roleDescription: string;
   districtRelationships: string;
   resumeFileName?: string;
+  /** Google Drive file id for the imported resume (opens/downloads via Drive). */
+  resumeDriveFileId?: string;
+  /** True when a Drive resume file id has been saved on this facilitator. */
+  hasStoredResume?: boolean;
 
   // Bio & media
   bio: string;

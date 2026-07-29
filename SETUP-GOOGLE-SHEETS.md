@@ -1,8 +1,8 @@
-# Google Sheets Import — Setup Guide
+# Firebase, Firestore & Google Sheets — Setup Guide
 
-This feature lets a signed-in user pick a Google Sheet, map its columns to
-facilitator fields, and import the rows into a shared Firestore database
-(either **merging** by email or **replacing** the whole directory).
+This app stores facilitator data in **Cloud Firestore** (inside a Firebase
+project). Google Sheets / Drive import is optional but recommended for bulk
+loading.
 
 You only need to do this setup once. It takes ~15 minutes. Everything below is
 free-tier friendly.
@@ -11,66 +11,100 @@ free-tier friendly.
 
 ## What you'll end up with
 
-- A **Firebase project** (Google sign-in + Firestore database).
-- **Google Cloud** APIs enabled in that same project (Sheets + Picker) plus an
-  OAuth Client ID and an API key.
-- A local **`.env.local`** file holding those keys (git-ignored).
+| Piece | What it does |
+|---|---|
+| **Firebase project** | Hosts Auth + **Firestore** (your database) |
+| **Google sign-in** | Users sign in with their Google account |
+| **Firestore** | Stores facilitators, headshots, and allowlisted users |
+| **Google Sheets / Drive APIs** | Import from a sheet + match headshots/resumes from Drive folders |
+| **`.env.local`** | Local keys (git-ignored) so the app can talk to Firebase/Google |
 
-> A Firebase project *is* a Google Cloud project, so it's all one project.
+> A Firebase project *is* a Google Cloud project — it's all one project.
+
+**Where data lives (all in Firestore — no Firebase Storage needed):**
+
+| Collection / field | Contents |
+|---|---|
+| `facilitators/{id}` | Each facilitator's profile, including resume Drive file id |
+| `headshots/{id}` | Compressed headshot photo (data URL) |
+| `allowedUsers/{email}` | Who can sign in and use the app |
 
 ---
 
-## Step 1 — Create the Firebase project
+## Step 1 — Create the Firebase project + Firestore
 
+### 1a. Create the project
 1. Go to <https://console.firebase.google.com> → **Add project**.
 2. Name it (e.g. `unbounded-facilitator-hub`). You can skip Google Analytics.
-3. In the left nav: **Build → Authentication → Get started**.
-   - Enable **Google** as a sign-in provider. Set a support email. Save.
-4. In the left nav: **Build → Firestore Database → Create database**.
-   - Start in **production mode**, pick a location, and create it.
-5. Add a **Web app**: Project Overview → the `</>` (web) icon → register app.
-   - Copy the config values it shows you (`apiKey`, `authDomain`, `projectId`,
-     `storageBucket`, `messagingSenderId`, `appId`). You'll paste these into
-     `.env.local` in Step 4.
 
-### Firestore security rules
+### 1b. Turn on Google sign-in
+1. Left nav: **Build → Authentication → Get started**.
+2. Open the **Sign-in method** tab → **Google** → **Enable**.
+3. Set a support email → **Save**.
 
-Copy the contents of `firestore.rules` from this repo into
-**Firestore → Rules**, then **Publish**. Those rules:
+### 1c. Create the Firestore database
+1. Left nav: **Build → Firestore Database → Create database**.
+2. Choose **Start in production mode**.
+3. Pick a location (closest to your users is fine) → **Enable**.
 
+> This is the only database the app uses. You do **not** need Firebase Storage.
+
+### 1d. Publish Firestore security rules
+1. Still under **Firestore**, open the **Rules** tab.
+2. Replace everything with the contents of `firestore.rules` from this repo.
+3. Click **Publish**.
+
+Those rules:
 - Allow only emails in the `allowedUsers` collection to read/write
-  facilitators and headshots.
+  `facilitators` and `headshots`.
 - Let any allowlisted user invite or revoke others.
 - Let bootstrap emails (listed in `isBootstrapEmail()`) seed the allowlist
   on first sign-in.
 
-Edit `isBootstrapEmail()` in the rules to include your admin email(s), and put
-the same addresses in `VITE_BOOTSTRAP_ALLOWLIST` in `.env.local` (comma-
-separated). After the first successful sign-in, use **Manage access** in the
-sidebar profile menu to invite colleagues.
+**Edit the bootstrap email** in `firestore.rules` → `isBootstrapEmail()` to
+include your admin address(es). You'll mirror the same list in
+`VITE_BOOTSTRAP_ALLOWLIST` in Step 4.
 
-Alternatively, skip bootstrap and manually create a document in Firestore:
+### 1e. Register a web app (get your Firebase config)
+1. Project Overview (gear / home) → click the **`</>`** (Web) icon → register
+   the app (nickname anything, e.g. `facilitator-hub`).
+2. Copy the config values Firebase shows you — you'll need all of these for
+   `.env.local`:
+   - `apiKey`
+   - `authDomain`
+   - `projectId`
+   - `storageBucket` *(Firebase always includes this; paste it even though we
+     don't use Storage)*
+   - `messagingSenderId`
+   - `appId`
 
-- Collection: `allowedUsers`
-- Document ID: your email in lowercase (e.g. `you@unbounded.org`)
-- Fields: `email` (string), `displayName` (null), `grantedBy` (null),
-  `grantedAt` (number, e.g. `Date.now()`)
+### 1f. First allowlisted user (optional if using bootstrap)
+If you prefer not to use bootstrap, manually create a document in Firestore:
 
-> Without an allowlist entry (or bootstrap), signed-in users see an
-> “Access not granted” screen and cannot open the directory.
+| Field | Value |
+|---|---|
+| Collection | `allowedUsers` |
+| Document ID | your email **lowercase** (e.g. `you@unbounded.org`) |
+| `email` | same lowercase string |
+| `displayName` | `null` |
+| `grantedBy` | `null` |
+| `grantedAt` | a number, e.g. `Date.now()` → `1730000000000` |
+
+> Without an allowlist entry (or bootstrap), signed-in users see
+> “Access not granted” and cannot open the directory.
 
 ---
 
-## Step 2 — Enable the Sheets & Picker APIs
+## Step 2 — Enable Google Sheets, Picker & Drive APIs
 
-Open the Google Cloud console for the **same project**
+Open the Google Cloud console for the **same** project
 (<https://console.cloud.google.com> → pick your Firebase project at the top):
 
 1. **APIs & Services → Library**.
 2. Search and **Enable** each of these:
-   - **Google Sheets API** (reading the spreadsheet)
-   - **Google Picker API** (the file/folder chooser)
-   - **Google Drive API** (listing + downloading headshot photos)
+   - **Google Sheets API** — reading the facilitator spreadsheet
+   - **Google Picker API** — the file/folder chooser in the browser
+   - **Google Drive API** — listing + downloading headshots and resumes
 
 ---
 
@@ -83,7 +117,7 @@ Open the Google Cloud console for the **same project**
    **External** and add yourself as a test user.
 3. Fill in app name + support email and save. No extra scopes needed here.
 
-### OAuth Client ID (for the Sheets/Picker token)
+### OAuth Client ID (Sheets / Drive token)
 1. **APIs & Services → Credentials → Create credentials → OAuth client ID**.
 2. Application type: **Web application**.
 3. Under **Authorized JavaScript origins**, add:
@@ -108,7 +142,13 @@ Open the Google Cloud console for the **same project**
 
    | Variable | Where it comes from |
    |---|---|
-   | `VITE_FIREBASE_API_KEY` … `VITE_FIREBASE_APP_ID` | Step 1.5 (web app config) |
+   | `VITE_FIREBASE_API_KEY` | Step 1e (web app config → `apiKey`) |
+   | `VITE_FIREBASE_AUTH_DOMAIN` | Step 1e (`authDomain`) |
+   | `VITE_FIREBASE_PROJECT_ID` | Step 1e (`projectId`) |
+   | `VITE_FIREBASE_STORAGE_BUCKET` | Step 1e (`storageBucket`) — paste it even though Storage is unused |
+   | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Step 1e (`messagingSenderId`) |
+   | `VITE_FIREBASE_APP_ID` | Step 1e (`appId`) |
+   | `VITE_BOOTSTRAP_ALLOWLIST` | Your admin email(s), comma-separated — must match `isBootstrapEmail()` in `firestore.rules` |
    | `VITE_GOOGLE_CLIENT_ID` | Step 3 (OAuth client) |
    | `VITE_GOOGLE_API_KEY` | Step 3 (API key) |
 
@@ -118,42 +158,31 @@ Open the Google Cloud console for the **same project**
    ```
 
 Until these are filled in, the app runs in **demo mode** on the in-memory
-sample data, and the import wizard shows a "finish setup" notice.
+sample data, and the import wizards show a "finish setup" notice.
 
 ---
 
-## Step 5 — Headshots (no extra setup needed)
+## Step 5 — Headshots & resumes (no extra Firebase setup)
 
-The "Import Headshots" feature copies photos from a Drive folder, compresses
-them in the browser, and stores them in a **`headshots` Firestore collection**
-(no Firebase Storage / Blaze upgrade required — it stays on the free plan).
+Both features use what you already set up:
 
-Just make sure your Firestore rules cover the `headshots` collection. Update the
-rules from Step 1 to include it, then **Publish**:
+- **Headshots** — photos are compressed in the browser and stored in the
+  Firestore `headshots` collection.
+- **Resumes** — the app saves each file's **Google Drive file id** on the
+  facilitator document in Firestore. Clicking a resume downloads it from Drive
+  (opens a new tab + saves the file). Files stay in your Drive folder; Firestore
+  only stores the link.
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /facilitators/{doc} {
-      allow read, write: if request.auth != null;
-    }
-    match /headshots/{doc} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
-
-> Note: the headshot import also requests a **Drive read scope**
-> (`drive.readonly`) so it can list and download the folder's images. The first
-> time you use it, Google will ask for that additional permission — approve it
-> once. (If you were already signed in, sign out and back in so your session
-> picks up the new scope.)
+Just make sure:
+1. Firestore rules from Step 1d are published (they already cover `facilitators`
+   and `headshots`).
+2. The **Google Drive API** from Step 2 is enabled.
+3. The first time you import, Google may ask for Drive permission — approve it.
+   If you were already signed in, sign out and back in so the new scope sticks.
 
 ---
 
-## Step 5b — AI biographies (optional, one-time)
+## Step 6 — AI biographies (optional)
 
 The **Biography** tab can generate a district-facing bio with Gemini when the
 intake form left that field blank.
@@ -195,7 +224,7 @@ template bio (not true AI).
 
 ---
 
-## Step 6 — Use it
+## Step 7 — Use it
 
 **Import facilitator data:**
 1. Open the app → sign in with Google.
@@ -203,7 +232,8 @@ template bio (not true AI).
 3. **Choose Google Sheet** → the Google Picker opens → pick your file.
 4. Confirm the auto-detected **column mapping** (adjust any that are off).
 5. Review the **preview**, choose **Merge / update** or **Replace everything**,
-   and run the import.
+   and run the import. Rows are written to the Firestore `facilitators`
+   collection.
 
 **Import headshots (after the facilitators exist):**
 1. Toolbar → **Import Headshots**.
@@ -211,8 +241,17 @@ template bio (not true AI).
 3. The app matches each photo to a facilitator by filename. **Review** the
    grid — thumbnails load as you scroll; fix any wrong/blank matches with the
    dropdown (set to "Skip" to leave a photo out).
-4. **Upload** — matched photos are copied into Storage and attached to each
-   facilitator's profile.
+4. **Upload** — matched photos are copied into the Firestore `headshots`
+   collection and attached to each facilitator's profile.
+
+**Import resumes (after the facilitators exist):**
+1. Toolbar → **Import Resumes**.
+2. **Choose Drive folder** → pick the folder of PDF/Word resumes.
+3. The app matches each file to a facilitator by filename. **Review** and fix
+   matches (set to "Skip" to leave a file out).
+4. **Upload** — each match saves the Drive file id onto that facilitator's
+   Firestore document. On the **Professional** tab, clicking the resume opens
+   it in a new tab and downloads the file.
 
 ---
 
@@ -234,11 +273,14 @@ template bio (not true AI).
   Only mapped columns overwrite existing values on merge.
 - **Replace is destructive** — it deletes all existing records first. The
   wizard makes you pick this explicitly.
-- **Headshot matching is by filename** and tolerant of inconsistent names
-  (e.g. `Jane Smith.jpg`, `smith_jane_final.png`, `JSmith-headshot.jpg`). It's
-  a best guess — always review before uploading.
-- **Headshots overwrite by facilitator**: re-importing a photo for the same
+- **Headshot / resume matching is by filename** and tolerant of inconsistent
+  names (e.g. `Jane Smith.jpg`, `Jane_Smith_Resume.pdf`). It's a best guess —
+  always review before uploading.
+- **Overwrites by facilitator**: re-importing a photo or resume for the same
   person replaces their previous one. If two files map to one person, the last
   uploaded wins (the review step warns you).
+- **Resumes stay in Drive.** Firestore only stores the file id + filename.
+  Anyone opening a resume needs Google Drive access to that shared folder.
+  Supported types: PDF, `.doc`, `.docx`.
 - Scopes used: `drive.file` + `spreadsheets.readonly` (sheet import) and
-  `drive.readonly` (listing/downloading the headshot folder).
+  `drive.readonly` (listing/downloading headshot and resume folders).

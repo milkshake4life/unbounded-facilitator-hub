@@ -10,6 +10,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { getAccessToken, downloadDriveFile } from "./googleSheets";
 import type { Facilitator } from "../types";
 
 const COLLECTION = "facilitators";
@@ -85,6 +86,49 @@ export async function fetchStoredHeadshot(
   const snap = await getDoc(doc(db, HEADSHOTS, facilitatorId));
   if (!snap.exists()) return null;
   return (snap.data().dataUrl as string) ?? null;
+}
+
+/**
+ * Attach a Google Drive resume file to a facilitator by saving its Drive file
+ * id + filename on the Firestore facilitator document.
+ */
+export async function saveResume(
+  facilitatorId: string,
+  driveFileId: string,
+  fileName: string
+): Promise<void> {
+  if (!db) throw new Error("Firestore is not configured.");
+  await updateDoc(doc(db, COLLECTION, facilitatorId), {
+    resumeDriveFileId: driveFileId,
+    resumeFileName: fileName,
+    hasStoredResume: true,
+  });
+}
+
+/**
+ * Download the resume from Drive, open it in a new tab, and trigger a file
+ * download. Requires the signed-in user to have Drive access to that file.
+ */
+export async function openAndDownloadResume(
+  driveFileId: string,
+  fileName: string
+): Promise<void> {
+  const token = await getAccessToken();
+  const blob = await downloadDriveFile(token, driveFileId);
+  const objectUrl = URL.createObjectURL(blob);
+
+  window.open(objectUrl, "_blank", "noopener,noreferrer");
+
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = fileName || "resume.pdf";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  // Keep the blob alive long enough for the new tab to load it.
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 /**

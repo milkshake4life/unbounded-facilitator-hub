@@ -26,6 +26,7 @@ import type { Facilitator, GradeBand } from "../types";
 import { COMFORT_LABELS, STANDARDS_INSTITUTE_LABELS } from "../types";
 import { classNames, comfortStyles, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
+import { openAndDownloadResume } from "../lib/facilitatorsService";
 import { generateFacilitatorBio, isBioAiConfigured } from "../lib/generateBio";
 import { Avatar } from "./Avatar";
 
@@ -363,6 +364,29 @@ function BioTab({
 }
 
 function ProfessionalTab({ f }: { f: Facilitator }) {
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+
+  const canOpenResume = Boolean(f.resumeDriveFileId);
+
+  async function handleResumeClick() {
+    if (!f.resumeDriveFileId || resumeBusy) return;
+    setResumeError(null);
+    setResumeBusy(true);
+    try {
+      await openAndDownloadResume(
+        f.resumeDriveFileId,
+        f.resumeFileName || "resume.pdf"
+      );
+    } catch (err) {
+      setResumeError(
+        err instanceof Error ? err.message : "Could not open resume."
+      );
+    } finally {
+      setResumeBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <DetailRow
@@ -393,11 +417,32 @@ function ProfessionalTab({ f }: { f: Facilitator }) {
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Resume
           </p>
-          {f.resumeFileName ? (
-            <button className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-50">
-              <Download className="h-4 w-4" />
+          {canOpenResume ? (
+            <>
+              <button
+                type="button"
+                onClick={handleResumeClick}
+                disabled={resumeBusy}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+              >
+                {resumeBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {f.resumeFileName || "Download resume"}
+              </button>
+              {resumeError && (
+                <p className="mt-1 text-xs text-rose-600">{resumeError}</p>
+              )}
+            </>
+          ) : f.resumeFileName ? (
+            <p className="mt-1 text-sm text-slate-500">
               {f.resumeFileName}
-            </button>
+              <span className="block text-xs text-slate-400">
+                Import resumes from Drive to attach a downloadable link.
+              </span>
+            </p>
           ) : (
             <p className="text-sm text-slate-400">Not provided</p>
           )}

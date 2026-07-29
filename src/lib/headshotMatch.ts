@@ -26,6 +26,12 @@ const NOISE_WORDS = new Set([
   "cropped",
   "unbounded",
   "ube",
+  // Resume / CV filenames
+  "resume",
+  "resumes",
+  "cv",
+  "curriculum",
+  "vitae",
 ]);
 
 function baseName(filename: string): string {

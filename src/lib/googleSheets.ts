@@ -6,7 +6,7 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? "";
 
 // drive.file → the specific file picked; spreadsheets.readonly → read cell
-// values; drive.readonly → list a headshot folder's images and download them.
+// values; drive.readonly → list a headshot/resume folder and download files.
 const SCOPES =
   "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly";
 
@@ -194,7 +194,10 @@ interface DriveImage {
 }
 
 /** Open the Google Picker in folder-selection mode. */
-export async function pickFolder(token: string): Promise<PickedFolder | null> {
+export async function pickFolder(
+  token: string,
+  title = "Select the folder of headshot photos"
+): Promise<PickedFolder | null> {
   await ensurePicker();
   const picker = window.google!.picker;
 
@@ -208,7 +211,7 @@ export async function pickFolder(token: string): Promise<PickedFolder | null> {
       .addView(view)
       .setOAuthToken(token)
       .setDeveloperKey(API_KEY)
-      .setTitle("Select the folder of headshot photos")
+      .setTitle(title)
       .setCallback((data) => {
         const action = data[picker.Response.ACTION];
         if (action === picker.Action.PICKED) {
@@ -291,6 +294,52 @@ export async function listImagesInFolder(
   return images;
 }
 
+const RESUME_MIME_QUERY = [
+  "mimeType = 'application/pdf'",
+  "mimeType = 'application/msword'",
+  "mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'",
+].join(" or ");
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+/** List resume-like files (PDF / Word) directly inside a Drive folder. */
+export async function listResumesInFolder(
+  token: string,
+  folderId: string
+): Promise<DriveFile[]> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const files: DriveFile[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and (${RESUME_MIME_QUERY}) and trashed = false`,
+      fields: "nextPageToken, files(id, name, mimeType)",
+      pageSize: "1000",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      { headers }
+    );
+    if (!res.ok) {
+      throw await driveError(res, "Could not list folder contents");
+    }
+    const data = (await res.json()) as DriveListResponse;
+    for (const f of data.files ?? []) {
+      files.push({ id: f.id, name: f.name, mimeType: f.mimeType });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return files;
+}
+
 /** Download a Drive file's bytes as a Blob. */
 export async function downloadDriveFile(
   token: string,
@@ -301,7 +350,7 @@ export async function downloadDriveFile(
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!res.ok) {
-    throw await driveError(res, "Could not download image");
+    throw await driveError(res, "Could not download file");
   }
   return res.blob();
 }
