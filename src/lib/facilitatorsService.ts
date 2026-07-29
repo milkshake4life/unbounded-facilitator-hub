@@ -137,7 +137,7 @@ export async function openAndDownloadResume(
  */
 export async function replaceAllFacilitators(
   incoming: Facilitator[]
-): Promise<{ added: number; deleted: number }> {
+): Promise<{ added: number; deleted: number; facilitators: Facilitator[] }> {
   if (!db) throw new Error("Firestore is not configured.");
   const existing = await getDocs(collection(db, COLLECTION));
 
@@ -154,7 +154,11 @@ export async function replaceAllFacilitators(
     await batch.commit();
   }
 
-  return { added: incoming.length, deleted: existing.size };
+  return {
+    added: incoming.length,
+    deleted: existing.size,
+    facilitators: incoming,
+  };
 }
 
 /**
@@ -167,7 +171,7 @@ export async function replaceAllFacilitators(
 export async function mergeFacilitatorsByEmail(
   incoming: Facilitator[],
   overlayKeys?: (keyof Facilitator)[]
-): Promise<{ added: number; updated: number }> {
+): Promise<{ added: number; updated: number; facilitators: Facilitator[] }> {
   if (!db) throw new Error("Firestore is not configured.");
   const existingSnap = await getDocs(collection(db, COLLECTION));
   const byEmail = new Map<string, Facilitator>();
@@ -208,5 +212,5 @@ export async function mergeFacilitatorsByEmail(
     await batch.commit();
   }
 
-  return { added, updated };
+  return { added, updated, facilitators: writes };
 }

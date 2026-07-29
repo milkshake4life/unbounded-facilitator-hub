@@ -226,32 +226,15 @@ template bio (not true AI).
 
 ## Step 7 — Use it
 
-**Import facilitator data:**
+**Import facilitator data (and optionally headshots / resumes):**
 1. Open the app → sign in with Google.
 2. Toolbar → **Import from Google Sheets**.
 3. **Choose Google Sheet** → the Google Picker opens → pick your file.
 4. Confirm the auto-detected **column mapping** (adjust any that are off).
-5. Review the **preview**, choose **Merge / update** or **Replace everything**,
-   and run the import. Rows are written to the Firestore `facilitators`
-   collection.
-
-**Import headshots (after the facilitators exist):**
-1. Toolbar → **Import Headshots**.
-2. **Choose Drive folder** → pick the folder of photos.
-3. The app matches each photo to a facilitator by filename. **Review** the
-   grid — thumbnails load as you scroll; fix any wrong/blank matches with the
-   dropdown (set to "Skip" to leave a photo out).
-4. **Upload** — matched photos are copied into the Firestore `headshots`
-   collection and attached to each facilitator's profile.
-
-**Import resumes (after the facilitators exist):**
-1. Toolbar → **Import Resumes**.
-2. **Choose Drive folder** → pick the folder of PDF/Word resumes.
-3. The app matches each file to a facilitator by filename. **Review** and fix
-   matches (set to "Skip" to leave a file out).
-4. **Upload** — each match saves the Drive file id onto that facilitator's
-   Firestore document. On the **Professional** tab, clicking the resume opens
-   it in a new tab and downloads the file.
+5. Choose **Merge / update** or **Replace everything**.
+6. Optionally **Attach Drive folders** for headshots and/or resumes.
+7. Run the import. If you attached folders, review filename matches and upload /
+   link them after the sheet writes to Firestore.
 
 ---
 

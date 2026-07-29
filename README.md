@@ -97,9 +97,7 @@ src/
     FacilitatorCard.tsx          # directory card w/ view/edit/delete menu
     FacilitatorModal.tsx         # facilitator detail view
     FacilitatorFormModal.tsx     # add / edit facilitator form
-    ImportWizardModal.tsx        # Google Sheets import wizard
-    HeadshotImportModal.tsx      # Drive headshot import wizard
-    ResumeImportModal.tsx        # Drive resume import wizard
+    ImportWizardModal.tsx        # Sheets import + optional headshot/resume folders
     ManageAccessModal.tsx        # invite / revoke allowlisted emails
     SignInScreen.tsx             # Google sign-in screen
     AccessDeniedScreen.tsx       # signed in but not allowlisted

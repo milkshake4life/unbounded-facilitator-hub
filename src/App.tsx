@@ -8,16 +8,12 @@ import {
   Users,
   ChevronRight,
   Check,
-  Image as ImageIcon,
-  FileText,
 } from "lucide-react";
 import { Sidebar, type DirectoryView } from "./components/Sidebar";
 import { FacilitatorCard } from "./components/FacilitatorCard";
 import { FacilitatorModal } from "./components/FacilitatorModal";
 import { FacilitatorFormModal } from "./components/FacilitatorFormModal";
 import { ImportWizardModal } from "./components/ImportWizardModal";
-import { HeadshotImportModal } from "./components/HeadshotImportModal";
-import { ResumeImportModal } from "./components/ResumeImportModal";
 import { SignInScreen } from "./components/SignInScreen";
 import { AccessDeniedScreen } from "./components/AccessDeniedScreen";
 import { ManageAccessModal } from "./components/ManageAccessModal";
@@ -64,8 +60,6 @@ export default function App() {
   const [editing, setEditing] = useState<Facilitator | null>(null);
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importingHeadshots, setImportingHeadshots] = useState(false);
-  const [importingResumes, setImportingResumes] = useState(false);
   const [managingAccess, setManagingAccess] = useState(false);
 
   // Persist to Firestore only when configured, signed in, and allowlisted.
@@ -293,22 +287,6 @@ export default function App() {
                 Import from Google Sheets
               </button>
 
-              <button
-                onClick={() => setImportingHeadshots(true)}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-50"
-              >
-                <ImageIcon className="h-4 w-4" />
-                Import Headshots
-              </button>
-
-              <button
-                onClick={() => setImportingResumes(true)}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-50"
-              >
-                <FileText className="h-4 w-4" />
-                Import Resumes
-              </button>
-
               {/* Sort */}
               <div className="relative">
                 <button
@@ -476,18 +454,6 @@ export default function App() {
         />
       )}
       {importing && <ImportWizardModal onClose={() => setImporting(false)} />}
-      {importingHeadshots && (
-        <HeadshotImportModal
-          facilitators={data}
-          onClose={() => setImportingHeadshots(false)}
-        />
-      )}
-      {importingResumes && (
-        <ResumeImportModal
-          facilitators={data}
-          onClose={() => setImportingResumes(false)}
-        />
-      )}
       {managingAccess && user?.email && (
         <ManageAccessModal
           currentUserEmail={user.email}
