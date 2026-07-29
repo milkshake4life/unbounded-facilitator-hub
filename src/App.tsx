@@ -24,11 +24,19 @@ import { ManageGroupMembersModal } from "./components/ManageGroupMembersModal";
 import { AddToGroupModal } from "./components/AddToGroupModal";
 import { GroupsPage } from "./components/GroupsPage";
 import { GroupCard } from "./components/GroupCard";
+import { FacilitatorFilterPanel } from "./components/FacilitatorFilterPanel";
 import { facilitators as seedData } from "./data/facilitators";
-import type { Facilitator, FacilitatorGroup, Pathway } from "./types";
-import { PATHWAYS } from "./types";
+import type { Facilitator, FacilitatorGroup } from "./types";
 import { classNames } from "./lib/ui";
 import { useOutsideDismiss } from "./lib/useOutsideDismiss";
+import {
+  EMPTY_FACILITATOR_FILTERS,
+  collectProgramOptions,
+  countActiveFilters,
+  hasActiveFilters,
+  matchesFacilitatorFilters,
+  type FacilitatorFilters,
+} from "./lib/facilitatorFilters";
 import { useAuth } from "./lib/useAuth";
 import { useAccess } from "./lib/useAccess";
 import {
@@ -65,7 +73,9 @@ export default function App() {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [pathwayFilter, setPathwayFilter] = useState<Pathway | "all">("all");
+  const [filters, setFilters] = useState<FacilitatorFilters>(
+    EMPTY_FACILITATOR_FILTERS
+  );
   const [page, setPage] = useState(1);
 
   const [sortOpen, setSortOpen] = useState(false);
@@ -141,6 +151,13 @@ export default function App() {
     [data]
   );
 
+  const programOptions = useMemo(
+    () => collectProgramOptions(data),
+    [data]
+  );
+
+  const activeFilterCount = countActiveFilters(filters);
+
   const archivedGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = groups.filter((g) => g.status === "archived");
@@ -172,8 +189,8 @@ export default function App() {
       list = data.filter((f) => f.status === "active");
     }
 
-    if (pathwayFilter !== "all") {
-      list = list.filter((f) => f.pathways.includes(pathwayFilter));
+    if (hasActiveFilters(filters)) {
+      list = list.filter((f) => matchesFacilitatorFilters(f, filters));
     }
 
     if (q) {
@@ -185,7 +202,6 @@ export default function App() {
           f.jobTitle,
           f.city,
           f.state,
-          ...f.pathways,
         ]
           .join(" ")
           .toLowerCase();
@@ -209,7 +225,7 @@ export default function App() {
     });
 
     return list;
-  }, [data, view, query, pathwayFilter, sortKey, activeGroup]);
+  }, [data, view, query, filters, sortKey, activeGroup]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -529,7 +545,9 @@ export default function App() {
                         {filtered.length === 1 ? "facilitator" : "facilitators"}
                       </>
                     )}
-                    {pathwayFilter !== "all" && <> · {pathwayFilter}</>}
+                    {activeFilterCount > 0 && (
+                      <> · {activeFilterCount} filtered</>
+                    )}
                   </>
                 ) : (
                   <>
@@ -537,7 +555,9 @@ export default function App() {
                       {filtered.length}
                     </span>{" "}
                     {filtered.length === 1 ? "facilitator" : "facilitators"}
-                    {pathwayFilter !== "all" && <> · {pathwayFilter}</>}
+                    {activeFilterCount > 0 && (
+                      <> · {activeFilterCount} filtered</>
+                    )}
                   </>
                 )}
               </p>
@@ -595,49 +615,29 @@ export default function App() {
                     }}
                     className={classNames(
                       "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                      pathwayFilter !== "all"
+                      activeFilterCount > 0
                         ? "border-brand-600 bg-brand-50 text-brand-700"
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     )}
                   >
                     <SlidersHorizontal className="h-4 w-4" />
                     Filter
+                    {activeFilterCount > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold text-white">
+                        {activeFilterCount}
+                      </span>
+                    )}
                   </button>
                   {filterOpen && (
-                    <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                      <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Pathway
-                      </p>
-                      <button
-                        onClick={() => {
-                          setPathwayFilter("all");
-                          setFilterOpen(false);
-                          resetPage();
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                      >
-                        All pathways
-                        {pathwayFilter === "all" && (
-                          <Check className="h-4 w-4 text-brand-600" />
-                        )}
-                      </button>
-                      {PATHWAYS.map((p) => (
-                        <button
-                          key={p}
-                          onClick={() => {
-                            setPathwayFilter(p);
-                            setFilterOpen(false);
-                            resetPage();
-                          }}
-                          className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                        >
-                          {p}
-                          {pathwayFilter === p && (
-                            <Check className="h-4 w-4 text-brand-600" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
+                    <FacilitatorFilterPanel
+                      filters={filters}
+                      programOptions={programOptions}
+                      onChange={(next) => {
+                        setFilters(next);
+                        resetPage();
+                      }}
+                      onClose={() => setFilterOpen(false)}
+                    />
                   )}
                 </div>
               </div>
