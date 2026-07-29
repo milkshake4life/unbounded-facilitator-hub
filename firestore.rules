@@ -55,5 +55,41 @@ service cloud.firestore {
     match /headshots/{doc} {
       allow read, write: if isAllowed();
     }
+
+    // Personal facilitator groups — owner-only, still require allowlist.
+    match /groups/{groupId} {
+      function isGroupOwner() {
+        return resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isValidGroup() {
+        return request.resource.data.keys().hasOnly([
+            'id', 'name', 'description', 'ownerUid', 'ownerEmail',
+            'facilitatorIds', 'status', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == groupId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 500
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerEmail is string
+          && request.resource.data.facilitatorIds is list
+          && request.resource.data.status in ['active', 'archived']
+          && (request.resource.data.createdAt is int
+              || request.resource.data.createdAt is float)
+          && (request.resource.data.updatedAt is int
+              || request.resource.data.updatedAt is float);
+      }
+
+      allow read, delete: if isAllowed() && isGroupOwner();
+      allow create: if isAllowed() && isValidGroup();
+      allow update: if isAllowed()
+        && isGroupOwner()
+        && isValidGroup()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
   }
 }

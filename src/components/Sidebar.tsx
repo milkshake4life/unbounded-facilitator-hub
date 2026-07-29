@@ -4,12 +4,12 @@ import type { User } from "firebase/auth";
 import { classNames } from "../lib/ui";
 import { Avatar } from "./Avatar";
 
-export type DirectoryView = "all" | "archived";
+export type DirectoryView = "all" | "groups" | "archived";
 
 interface SidebarProps {
   activeView: DirectoryView;
   onViewChange: (view: DirectoryView) => void;
-  counts: { all: number; archived: number };
+  counts: { all: number; groups: number; archived: number };
   user?: User | null;
   onSignOut?: () => void;
   onManageAccess?: () => void;
@@ -81,6 +81,18 @@ export function Sidebar({
           >
             <span>All Facilitators</span>
             <span className="text-xs text-slate-400">{counts.all}</span>
+          </button>
+          <button
+            onClick={() => onViewChange("groups")}
+            className={classNames(
+              "flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm transition-colors",
+              activeView === "groups"
+                ? "font-semibold text-brand-700"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <span>Groups</span>
+            <span className="text-xs text-slate-400">{counts.groups}</span>
           </button>
           <button
             onClick={() => onViewChange("archived")}

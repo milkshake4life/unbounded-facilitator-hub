@@ -34,6 +34,24 @@ export interface AllowedUser {
   grantedAt: number;
 }
 
+/**
+ * A personal curated set of facilitators owned by one user.
+ * Membership lives on the group doc — never on shared facilitator records.
+ * Think of a group like a folder: name it first, then add facilitators inside.
+ */
+export interface FacilitatorGroup {
+  id: string;
+  name: string;
+  /** Optional note about what this group is for. */
+  description: string;
+  ownerUid: string;
+  ownerEmail: string;
+  facilitatorIds: string[];
+  status: FacilitatorStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Facilitator {
   id: string;
 

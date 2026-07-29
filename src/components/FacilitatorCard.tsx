@@ -6,6 +6,8 @@ import {
   MapPin,
   Archive,
   ArchiveRestore,
+  FolderPlus,
+  UserMinus,
 } from "lucide-react";
 import type { Facilitator } from "../types";
 import { classNames, pathwayShortLabels, pathwayStyles } from "../lib/ui";
@@ -16,8 +18,17 @@ interface FacilitatorCardProps {
   facilitator: Facilitator;
   onView: (f: Facilitator) => void;
   onEdit: (f: Facilitator) => void;
-  onArchive: (f: Facilitator) => void;
-  onDelete: (f: Facilitator) => void;
+  /** Directory menu: archive / restore facilitator. */
+  onArchive?: (f: Facilitator) => void;
+  /** Directory menu: delete facilitator. */
+  onDelete?: (f: Facilitator) => void;
+  /** Directory menu: add to a personal group. */
+  onAddToGroup?: (f: Facilitator) => void;
+  /**
+   * When set, the card is shown inside a group — menu is only Edit +
+   * Remove from group.
+   */
+  onRemoveFromGroup?: (f: Facilitator) => void;
 }
 
 export function FacilitatorCard({
@@ -26,10 +37,13 @@ export function FacilitatorCard({
   onEdit,
   onArchive,
   onDelete,
+  onAddToGroup,
+  onRemoveFromGroup,
 }: FacilitatorCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isArchived = facilitator.status === "archived";
+  const inGroup = Boolean(onRemoveFromGroup);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -67,7 +81,7 @@ export function FacilitatorCard({
           <MoreHorizontal className="h-5 w-5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 top-9 z-20 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
             <MenuButton
               icon={<Pencil className="h-4 w-4" />}
               label="Edit"
@@ -77,31 +91,58 @@ export function FacilitatorCard({
                 onEdit(facilitator);
               }}
             />
-            <MenuButton
-              icon={
-                isArchived ? (
-                  <ArchiveRestore className="h-4 w-4" />
-                ) : (
-                  <Archive className="h-4 w-4" />
-                )
-              }
-              label={isArchived ? "Restore" : "Archive"}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onArchive(facilitator);
-              }}
-            />
-            <MenuButton
-              icon={<Trash2 className="h-4 w-4" />}
-              label="Delete"
-              danger
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(false);
-                onDelete(facilitator);
-              }}
-            />
+            {inGroup && onRemoveFromGroup && (
+              <MenuButton
+                icon={<UserMinus className="h-4 w-4" />}
+                label="Remove from group"
+                danger
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onRemoveFromGroup(facilitator);
+                }}
+              />
+            )}
+            {!inGroup && onAddToGroup && (
+              <MenuButton
+                icon={<FolderPlus className="h-4 w-4" />}
+                label="Add to group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onAddToGroup(facilitator);
+                }}
+              />
+            )}
+            {!inGroup && onArchive && (
+              <MenuButton
+                icon={
+                  isArchived ? (
+                    <ArchiveRestore className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )
+                }
+                label={isArchived ? "Restore" : "Archive"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onArchive(facilitator);
+                }}
+              />
+            )}
+            {!inGroup && onDelete && (
+              <MenuButton
+                icon={<Trash2 className="h-4 w-4" />}
+                label="Delete"
+                danger
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onDelete(facilitator);
+                }}
+              />
+            )}
           </div>
         )}
       </div>
