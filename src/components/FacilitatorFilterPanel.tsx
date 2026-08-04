@@ -2,12 +2,14 @@ import { Check, X } from "lucide-react";
 import type { Pathway } from "../types";
 import { classNames, pathwayShortLabels } from "../lib/ui";
 import {
+  EMPTY_FACILITATOR_FILTERS,
   EVENT_FILTER_OPTIONS,
   PATHWAYS,
   type EventFilter,
   type FacilitatorFilters,
   countActiveFilters,
 } from "../lib/facilitatorFilters";
+import { REGIONS, regionStateSummary, type Region } from "../lib/regions";
 
 interface FacilitatorFilterPanelProps {
   filters: FacilitatorFilters;
@@ -58,8 +60,18 @@ export function FacilitatorFilterPanel({
     });
   }
 
+  function toggleRegion(r: Region) {
+    const has = filters.regions.includes(r);
+    onChange({
+      ...filters,
+      regions: has
+        ? filters.regions.filter((x) => x !== r)
+        : [...filters.regions, r],
+    });
+  }
+
   function clearAll() {
-    onChange({ pathways: [], events: [], programs: [] });
+    onChange(EMPTY_FACILITATOR_FILTERS);
   }
 
   return (
@@ -69,7 +81,7 @@ export function FacilitatorFilterPanel({
           <p className="text-sm font-semibold text-slate-900">Filters</p>
           <p className="text-xs text-slate-400">
             {active === 0
-              ? "Narrow by pathway, events, or programs"
+              ? "Narrow by pathway, region, events, or programs"
               : `${active} active`}
           </p>
         </div>
@@ -92,6 +104,20 @@ export function FacilitatorFilterPanel({
                 label={pathwayShortLabels[p]}
                 selected={filters.pathways.includes(p)}
                 onClick={() => togglePathway(p)}
+              />
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Region">
+          <div className="flex flex-wrap gap-1.5">
+            {REGIONS.map((r) => (
+              <Chip
+                key={r}
+                label={r}
+                title={`${r}: ${regionStateSummary(r)}`}
+                selected={filters.regions.includes(r)}
+                onClick={() => toggleRegion(r)}
               />
             ))}
           </div>
@@ -197,14 +223,17 @@ function Chip({
   label,
   selected,
   onClick,
+  title,
 }: {
   label: string;
   selected: boolean;
   onClick: () => void;
+  title?: string;
 }) {
   return (
     <button
       type="button"
+      title={title}
       onClick={onClick}
       className={classNames(
         "inline-flex max-w-full items-center gap-1 truncate rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors",

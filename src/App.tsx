@@ -35,7 +35,6 @@ import { GroupCard } from "./components/GroupCard";
 import { FacilitatorFilterPanel } from "./components/FacilitatorFilterPanel";
 import { TemplatesPage } from "./components/TemplatesPage";
 import { TemplateModal } from "./components/TemplateModal";
-import { TemplateImportModal } from "./components/TemplateImportModal";
 import { EventsPage } from "./components/EventsPage";
 import { EventDetailPage } from "./components/EventDetailPage";
 import { EventModal } from "./components/EventModal";
@@ -59,6 +58,7 @@ import {
   matchesFacilitatorFilters,
   type FacilitatorFilters,
 } from "./lib/facilitatorFilters";
+import { regionForState } from "./lib/regions";
 import { useAuth } from "./lib/useAuth";
 import { useAccess } from "./lib/useAccess";
 import {
@@ -74,7 +74,6 @@ import {
 import {
   subscribeTemplates,
   saveTemplate,
-  saveTemplates,
   deleteTemplate,
 } from "./lib/templatesService";
 import {
@@ -82,8 +81,6 @@ import {
   saveEvent,
   deleteEvent,
 } from "./lib/eventsService";
-import type { ParsedTemplateRow } from "./lib/templateImport";
-
 type SortKey = "name" | "name_desc" | "recent";
 
 const PAGE_SIZE = 12;
@@ -146,7 +143,6 @@ export default function App() {
   const [templateModal, setTemplateModal] = useState<
     EmailTemplate | "new" | null
   >(null);
-  const [importingTemplates, setImportingTemplates] = useState(false);
   const [eventModal, setEventModal] = useState<BookingEvent | "new" | null>(
     null
   );
@@ -298,6 +294,7 @@ export default function App() {
           f.jobTitle,
           f.city,
           f.state,
+          regionForState(f.state) ?? "",
         ]
           .join(" ")
           .toLowerCase();
@@ -621,32 +618,6 @@ export default function App() {
     }
   }
 
-  async function handleImportTemplates(drafts: ParsedTemplateRow[]) {
-    const uid = user?.uid || "demo";
-    const email = (user?.email || "demo@local").toLowerCase();
-    const now = Date.now();
-    const created: EmailTemplate[] = drafts.map((d, i) => ({
-      id: crypto.randomUUID(),
-      name: d.name,
-      purpose: d.purpose,
-      subject: d.subject,
-      body: d.body,
-      createdByUid: uid,
-      createdByEmail: email,
-      updatedByUid: uid,
-      updatedByEmail: email,
-      createdAt: now + i,
-      updatedAt: now + i,
-    }));
-    if (persist) {
-      await saveTemplates(created);
-    } else {
-      setTemplates((prev) =>
-        [...prev, ...created].sort((a, b) => a.name.localeCompare(b.name))
-      );
-    }
-  }
-
   function viewLabel(): string {
     if (view === "archived") return "Archived";
     if (view === "groups") return "Groups";
@@ -766,22 +737,13 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3">
             {showingTemplates && (
-              <>
-                <button
-                  onClick={() => setImportingTemplates(true)}
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-                >
-                  <Upload className="h-4 w-4" />
-                  Import from Doc
-                </button>
-                <button
-                  onClick={() => setTemplateModal("new")}
-                  className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  New template
-                </button>
-              </>
+              <button
+                onClick={() => setTemplateModal("new")}
+                className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+              >
+                <Plus className="h-4 w-4" />
+                New template
+              </button>
             )}
             {showingEventsList && (
               <button
@@ -909,7 +871,6 @@ export default function App() {
             onCreate={() => setTemplateModal("new")}
             onEdit={(t) => setTemplateModal(t)}
             onDelete={handleDeleteTemplate}
-            onImport={() => setImportingTemplates(true)}
           />
         ) : showingEventDetail && activeEvent ? (
           <EventDetailPage
@@ -952,7 +913,7 @@ export default function App() {
                   setQuery(e.target.value);
                   resetPage();
                 }}
-                placeholder="Search name, organization, content area, location…"
+                placeholder="Search name, organization, content area, location, region…"
                 className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-800 shadow-sm outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
             </div>
@@ -1280,12 +1241,6 @@ export default function App() {
           initial={templateModal === "new" ? null : templateModal}
           onClose={() => setTemplateModal(null)}
           onSave={handleSaveTemplate}
-        />
-      )}
-      {importingTemplates && (
-        <TemplateImportModal
-          onClose={() => setImportingTemplates(false)}
-          onImport={handleImportTemplates}
         />
       )}
       {eventModal && (

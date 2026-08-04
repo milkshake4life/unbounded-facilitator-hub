@@ -1,5 +1,6 @@
 import type { Facilitator, Pathway } from "../types";
 import { PATHWAYS } from "../types";
+import { regionForState, type Region } from "./regions";
 
 /** Past UnboundEd events a facilitator may have led. */
 export type EventFilter = "standards_institute" | "summit" | "in_service";
@@ -47,16 +48,21 @@ export interface FacilitatorFilters {
   events: EventFilter[];
   /** Empty = any program. Matched with OR within this list. */
   programs: string[];
+  /** Empty = anywhere. Matched with OR within this list. */
+  regions: Region[];
 }
 
 export const EMPTY_FACILITATOR_FILTERS: FacilitatorFilters = {
   pathways: [],
   events: [],
   programs: [],
+  regions: [],
 };
 
 export function countActiveFilters(f: FacilitatorFilters): number {
-  return f.pathways.length + f.events.length + f.programs.length;
+  return (
+    f.pathways.length + f.events.length + f.programs.length + f.regions.length
+  );
 }
 
 export function hasActiveFilters(f: FacilitatorFilters): boolean {
@@ -95,6 +101,10 @@ export function matchesFacilitatorFilters(
     !filters.programs.some((p) => f.otherPrograms.includes(p))
   ) {
     return false;
+  }
+  if (filters.regions.length > 0) {
+    const region = regionForState(f.state);
+    if (!region || !filters.regions.includes(region)) return false;
   }
   return true;
 }
