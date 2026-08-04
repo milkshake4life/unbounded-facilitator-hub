@@ -17,6 +17,7 @@ free-tier friendly.
 | **Google sign-in** | Users sign in with their Google account |
 | **Firestore** | Stores facilitators, headshots, and allowlisted users |
 | **Google Sheets / Drive APIs** | Import from a sheet + match headshots/resumes from Drive folders |
+| **Gmail API** | Email everyone in a facilitator group from your Google account |
 | **`.env.local`** | Local keys (git-ignored) so the app can talk to Firebase/Google |
 
 > A Firebase project *is* a Google Cloud project — it's all one project.
@@ -28,6 +29,8 @@ free-tier friendly.
 | `facilitators/{id}` | Each facilitator's profile, including resume Drive file id |
 | `headshots/{id}` | Compressed headshot photo (data URL) |
 | `allowedUsers/{email}` | Who can sign in and use the app |
+| `groups/{id}` | Personal facilitator groups (owner-only) |
+| `emailTemplates/{id}` | Shared team email templates (all allowlisted users) |
 
 ---
 
@@ -56,10 +59,14 @@ free-tier friendly.
 
 Those rules:
 - Allow only emails in the `allowedUsers` collection to read/write
-  `facilitators` and `headshots`.
+  `facilitators`, `headshots`, and `emailTemplates`.
 - Let any allowlisted user invite or revoke others.
 - Let bootstrap emails (listed in `isBootstrapEmail()`) seed the allowlist
   on first sign-in.
+- Personal `groups` are owner-only; email templates are shared across the team.
+
+If you already published rules earlier, re-publish from `firestore.rules` so
+the `emailTemplates` collection is covered.
 
 **Edit the bootstrap email** in `firestore.rules` → `isBootstrapEmail()` to
 include your admin address(es). You'll mirror the same list in
@@ -95,7 +102,7 @@ If you prefer not to use bootstrap, manually create a document in Firestore:
 
 ---
 
-## Step 2 — Enable Google Sheets, Picker & Drive APIs
+## Step 2 — Enable Google Sheets, Picker, Drive & Gmail APIs
 
 Open the Google Cloud console for the **same** project
 (<https://console.cloud.google.com> → pick your Firebase project at the top):
@@ -105,6 +112,7 @@ Open the Google Cloud console for the **same** project
    - **Google Sheets API** — reading the facilitator spreadsheet
    - **Google Picker API** — the file/folder chooser in the browser
    - **Google Drive API** — listing + downloading headshots and resumes
+   - **Gmail API** — sending group emails from your Google account
 
 ---
 
@@ -115,7 +123,11 @@ Open the Google Cloud console for the **same** project
 2. Choose **Internal** if this is a Google Workspace org (recommended — only
    your org's accounts can sign in, no verification needed). Otherwise
    **External** and add yourself as a test user.
-3. Fill in app name + support email and save. No extra scopes needed here.
+3. Fill in app name + support email and save.
+4. Under **Scopes**, you do **not** need to pre-register scopes for this app —
+   the browser requests Sheets/Drive/Gmail scopes at runtime when you import or
+   email a group. The first time you use **Email group**, Google will ask for
+   permission to send email as you (`gmail.send`).
 
 ### OAuth Client ID (Sheets / Drive token)
 1. **APIs & Services → Credentials → Create credentials → OAuth client ID**.
@@ -179,6 +191,38 @@ Just make sure:
 2. The **Google Drive API** from Step 2 is enabled.
 3. The first time you import, Google may ask for Drive permission — approve it.
    If you were already signed in, sign out and back in so the new scope sticks.
+
+---
+
+## Step 5b — Email a facilitator group (Gmail)
+
+Once the **Gmail API** from Step 2 is enabled:
+
+1. Open a group → **Email group**.
+2. Optionally choose **Use template** to fill subject + body from the shared
+   library (edit placeholders like `[Event Name]` before sending).
+3. Pick recipients (defaults to everyone with an UnboundEd or personal email).
+4. Write or tweak the subject + message → **Send**.
+5. The first send opens a Google consent prompt for **Send email on your
+   behalf**. Approve it — mail goes out from your Gmail, facilitators are
+   BCC’d (they don’t see each other’s addresses), and you get a copy in To.
+
+If send fails with “Gmail API isn’t enabled”, go back to Step 2 and enable it,
+then wait a minute and try again.
+
+### Shared email templates
+
+The **Templates** nav item is a team-wide library (Communication / Purpose /
+Text — same shape as the Facilitator Communication Templates Google Doc).
+
+- **Day to day:** create and edit templates manually in the Hub.
+- **First-time seed:** Templates → **Import from Doc**, pick that Google Doc.
+  The importer reads every table with columns `Communication`,
+  `Purpose/Timeline`, and `Text` (via Drive HTML export). Rows with a leading
+  `Subject: …` line are split into subject + body automatically. Import always
+  *adds* new templates (it does not replace existing ones).
+- Requires the **Google Drive API** (already listed in Step 2) so the Doc can
+  be exported.
 
 ---
 
@@ -266,4 +310,5 @@ template bio (not true AI).
   Anyone opening a resume needs Google Drive access to that shared folder.
   Supported types: PDF, `.doc`, `.docx`.
 - Scopes used: `drive.file` + `spreadsheets.readonly` (sheet import) and
-  `drive.readonly` (listing/downloading headshot and resume folders).
+  `drive.readonly` (listing/downloading headshot and resume folders, and
+  exporting the communication templates Google Doc as HTML).

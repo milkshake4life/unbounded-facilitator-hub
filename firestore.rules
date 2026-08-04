@@ -56,6 +56,82 @@ service cloud.firestore {
       allow read, write: if isAllowed();
     }
 
+    // Shared email templates — any allowlisted user can read/write.
+    match /emailTemplates/{templateId} {
+      function isValidTemplate() {
+        return request.resource.data.keys().hasOnly([
+            'id', 'name', 'purpose', 'subject', 'body',
+            'createdByUid', 'createdByEmail',
+            'updatedByUid', 'updatedByEmail',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == templateId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 200
+          && request.resource.data.purpose is string
+          && request.resource.data.purpose.size() <= 500
+          && request.resource.data.subject is string
+          && request.resource.data.subject.size() <= 300
+          && request.resource.data.body is string
+          && request.resource.data.body.size() <= 20000
+          && request.resource.data.createdByUid is string
+          && request.resource.data.createdByEmail is string
+          && request.resource.data.updatedByUid is string
+          && request.resource.data.updatedByEmail is string
+          && (request.resource.data.createdAt is int
+              || request.resource.data.createdAt is float)
+          && (request.resource.data.updatedAt is int
+              || request.resource.data.updatedAt is float);
+      }
+
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidTemplate();
+      allow delete: if isAllowed();
+    }
+
+    // Shared booking events / placements — any allowlisted user can read/write.
+    match /events/{eventId} {
+      function isValidEvent() {
+        return request.resource.data.keys().hasOnly([
+            'id', 'accountSchool', 'eventType', 'eventMode', 'startDate',
+            'eventConfirmed', 'notes', 'placements', 'status',
+            'createdByUid', 'createdByEmail',
+            'updatedByUid', 'updatedByEmail',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == eventId
+          && request.resource.data.accountSchool is string
+          && request.resource.data.accountSchool.size() > 0
+          && request.resource.data.accountSchool.size() <= 200
+          && request.resource.data.eventType in [
+            'Executive Coaching', 'GLEAM Learning Walk', 'In Service Workshop',
+            'Standards Institute', 'Summit', 'Custom'
+          ]
+          && request.resource.data.eventMode in ['In-Person', 'Virtual']
+          && request.resource.data.startDate is string
+          && request.resource.data.startDate.size() <= 40
+          && request.resource.data.eventConfirmed is bool
+          && request.resource.data.notes is string
+          && request.resource.data.notes.size() <= 2000
+          && request.resource.data.placements is list
+          && request.resource.data.placements.size() <= 200
+          && request.resource.data.status in ['active', 'archived']
+          && request.resource.data.createdByUid is string
+          && request.resource.data.createdByEmail is string
+          && request.resource.data.updatedByUid is string
+          && request.resource.data.updatedByEmail is string
+          && (request.resource.data.createdAt is int
+              || request.resource.data.createdAt is float)
+          && (request.resource.data.updatedAt is int
+              || request.resource.data.updatedAt is float);
+      }
+
+      allow read: if isAllowed();
+      allow create, update: if isAllowed() && isValidEvent();
+      allow delete: if isAllowed();
+    }
+
     // Personal facilitator groups — owner-only, still require allowlist.
     match /groups/{groupId} {
       function isGroupOwner() {

@@ -8,7 +8,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { FacilitatorGroup } from "../types";
+import type { FacilitatorGroup, FacilitatorStatus } from "../types";
 
 const COLLECTION = "groups";
 
@@ -38,7 +38,9 @@ export function subscribeUserGroups(
           ...data,
           description: data.description ?? "",
           facilitatorIds: data.facilitatorIds ?? [],
-          status: data.status === "archived" ? "archived" : "active",
+          status: (data.status === "archived"
+            ? "archived"
+            : "active") as FacilitatorStatus,
         };
       });
       list.sort((a, b) => a.name.localeCompare(b.name));

@@ -10,8 +10,15 @@ import {
   Check,
   Pencil,
   FolderOpen,
+  Mail,
+  FileText,
+  CalendarDays,
 } from "lucide-react";
-import { Sidebar, type DirectoryView } from "./components/Sidebar";
+import {
+  Sidebar,
+  type AppSection,
+  type DirectoryView,
+} from "./components/Sidebar";
 import { FacilitatorCard } from "./components/FacilitatorCard";
 import { FacilitatorModal } from "./components/FacilitatorModal";
 import { FacilitatorFormModal } from "./components/FacilitatorFormModal";
@@ -21,12 +28,27 @@ import { AccessDeniedScreen } from "./components/AccessDeniedScreen";
 import { ManageAccessModal } from "./components/ManageAccessModal";
 import { GroupModal } from "./components/GroupModal";
 import { ManageGroupMembersModal } from "./components/ManageGroupMembersModal";
+import { GroupEmailModal } from "./components/GroupEmailModal";
 import { AddToGroupModal } from "./components/AddToGroupModal";
 import { GroupsPage } from "./components/GroupsPage";
 import { GroupCard } from "./components/GroupCard";
 import { FacilitatorFilterPanel } from "./components/FacilitatorFilterPanel";
+import { TemplatesPage } from "./components/TemplatesPage";
+import { TemplateModal } from "./components/TemplateModal";
+import { TemplateImportModal } from "./components/TemplateImportModal";
+import { EventsPage } from "./components/EventsPage";
+import { EventDetailPage } from "./components/EventDetailPage";
+import { EventModal } from "./components/EventModal";
+import { AddPlacementModal } from "./components/AddPlacementModal";
 import { facilitators as seedData } from "./data/facilitators";
-import type { Facilitator, FacilitatorGroup } from "./types";
+import { seedTemplates } from "./data/templates";
+import type {
+  BookingEvent,
+  EmailTemplate,
+  EventPlacement,
+  Facilitator,
+  FacilitatorGroup,
+} from "./types";
 import { classNames } from "./lib/ui";
 import { useOutsideDismiss } from "./lib/useOutsideDismiss";
 import {
@@ -49,6 +71,18 @@ import {
   saveGroup,
   deleteGroup,
 } from "./lib/groupsService";
+import {
+  subscribeTemplates,
+  saveTemplate,
+  saveTemplates,
+  deleteTemplate,
+} from "./lib/templatesService";
+import {
+  subscribeEvents,
+  saveEvent,
+  deleteEvent,
+} from "./lib/eventsService";
+import type { ParsedTemplateRow } from "./lib/templateImport";
 
 type SortKey = "name" | "name_desc" | "recent";
 
@@ -69,8 +103,14 @@ export default function App() {
   // is streamed live from Firestore.
   const [data, setData] = useState<Facilitator[]>(configured ? [] : seedData);
   const [groups, setGroups] = useState<FacilitatorGroup[]>([]);
+  const [events, setEvents] = useState<BookingEvent[]>([]);
+  const [templates, setTemplates] = useState<EmailTemplate[]>(
+    configured ? [] : seedTemplates
+  );
+  const [section, setSection] = useState<AppSection>("directory");
   const [view, setView] = useState<DirectoryView>("all");
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [filters, setFilters] = useState<FacilitatorFilters>(
@@ -97,7 +137,20 @@ export default function App() {
   const [membersModal, setMembersModal] = useState<FacilitatorGroup | null>(
     null
   );
+  const [emailModal, setEmailModal] = useState<{
+    name: string;
+    title: string;
+    members: Facilitator[];
+  } | null>(null);
   const [addToGroupFor, setAddToGroupFor] = useState<Facilitator | null>(null);
+  const [templateModal, setTemplateModal] = useState<
+    EmailTemplate | "new" | null
+  >(null);
+  const [importingTemplates, setImportingTemplates] = useState(false);
+  const [eventModal, setEventModal] = useState<BookingEvent | "new" | null>(
+    null
+  );
+  const [addingPlacement, setAddingPlacement] = useState(false);
 
   // Persist to Firestore only when configured, signed in, and allowlisted.
   const persist = configured && !!user && access === "allowed";
@@ -125,15 +178,50 @@ export default function App() {
     return unsub;
   }, [persist, user, configured]);
 
+  useEffect(() => {
+    if (!persist) {
+      if (!configured) return;
+      setTemplates([]);
+      return;
+    }
+    const unsub = subscribeTemplates(
+      (list) => setTemplates(list),
+      (err) => console.error("Templates subscription error:", err)
+    );
+    return unsub;
+  }, [persist, configured]);
+
+  useEffect(() => {
+    if (!persist) {
+      if (!configured) return;
+      setEvents([]);
+      return;
+    }
+    const unsub = subscribeEvents(
+      (list) => setEvents(list),
+      (err) => console.error("Events subscription error:", err)
+    );
+    return unsub;
+  }, [persist, configured]);
+
   const activeGroup = useMemo(
     () => groups.find((g) => g.id === activeGroupId) ?? null,
     [groups, activeGroupId]
+  );
+
+  const activeEvent = useMemo(
+    () => events.find((e) => e.id === activeEventId) ?? null,
+    [events, activeEventId]
   );
 
   // If the selected group was deleted elsewhere, clear the selection.
   useEffect(() => {
     if (activeGroupId && !activeGroup) setActiveGroupId(null);
   }, [activeGroupId, activeGroup]);
+
+  useEffect(() => {
+    if (activeEventId && !activeEvent) setActiveEventId(null);
+  }, [activeEventId, activeEvent]);
 
   const counts = useMemo(
     () => ({
@@ -142,8 +230,10 @@ export default function App() {
       archived:
         data.filter((f) => f.status === "archived").length +
         groups.filter((g) => g.status === "archived").length,
+      events: events.filter((e) => e.status !== "archived").length,
+      templates: templates.length,
     }),
-    [data, groups]
+    [data, groups, events, templates]
   );
 
   const activeFacilitators = useMemo(
@@ -170,9 +260,15 @@ export default function App() {
     return list.slice().sort((a, b) => a.name.localeCompare(b.name));
   }, [groups, query]);
 
+  const showingTemplates = section === "templates";
+  const showingEvents = section === "events";
   /** Groups landing page (list) vs drilled into a single group. */
-  const showingGroupsList = view === "groups" && !activeGroup;
-  const showingGroupDetail = view === "groups" && Boolean(activeGroup);
+  const showingGroupsList =
+    section === "directory" && view === "groups" && !activeGroup;
+  const showingGroupDetail =
+    section === "directory" && view === "groups" && Boolean(activeGroup);
+  const showingEventsList = showingEvents && !activeEvent;
+  const showingEventDetail = showingEvents && Boolean(activeEvent);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -380,6 +476,177 @@ export default function App() {
     handleToggleFacilitatorInGroup(activeGroup, facilitator.id, false);
   }
 
+  function persistTemplate(template: EmailTemplate) {
+    const uid = user?.uid || "demo";
+    const email = (user?.email || "demo@local").toLowerCase();
+    const now = Date.now();
+    const isNew = !templates.some((t) => t.id === template.id);
+    const saved: EmailTemplate = {
+      ...template,
+      createdByUid: isNew ? uid : template.createdByUid || uid,
+      createdByEmail: isNew
+        ? email
+        : template.createdByEmail || email,
+      updatedByUid: uid,
+      updatedByEmail: email,
+      createdAt: isNew ? now : template.createdAt,
+      updatedAt: now,
+    };
+    if (persist) {
+      saveTemplate(saved).catch((err) =>
+        window.alert(`Could not save template: ${err.message}`)
+      );
+    } else {
+      setTemplates((prev) => {
+        const exists = prev.some((t) => t.id === saved.id);
+        const next = exists
+          ? prev.map((t) => (t.id === saved.id ? saved : t))
+          : [...prev, saved];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
+    }
+    return saved;
+  }
+
+  function handleSaveTemplate(template: EmailTemplate) {
+    persistTemplate(template);
+    setTemplateModal(null);
+  }
+
+  function persistEvent(event: BookingEvent) {
+    const uid = user?.uid || "demo";
+    const email = (user?.email || "demo@local").toLowerCase();
+    const now = Date.now();
+    const isNew = !events.some((e) => e.id === event.id);
+    const saved: BookingEvent = {
+      ...event,
+      notes: event.notes ?? "",
+      startDate: event.startDate ?? "",
+      eventConfirmed: Boolean(event.eventConfirmed),
+      placements: (event.placements ?? []).map((p) => ({
+        id: p.id,
+        facilitatorId: p.facilitatorId,
+        pathway: p.pathway ?? "",
+        section: p.section ?? "",
+        facilitatorConfirmed: Boolean(p.facilitatorConfirmed),
+        facilitatorDropped: Boolean(p.facilitatorDropped),
+        calHoldSent: Boolean(p.calHoldSent),
+        contractRequested: Boolean(p.contractRequested),
+        notes: p.notes ?? "",
+      })),
+      status: event.status ?? "active",
+      createdByUid: isNew ? uid : event.createdByUid || uid,
+      createdByEmail: isNew ? email : event.createdByEmail || email,
+      updatedByUid: uid,
+      updatedByEmail: email,
+      createdAt: isNew ? now : event.createdAt,
+      updatedAt: now,
+    };
+    if (persist) {
+      saveEvent(saved).catch((err) =>
+        window.alert(`Could not save event: ${err.message}`)
+      );
+    } else {
+      setEvents((prev) => {
+        const exists = prev.some((e) => e.id === saved.id);
+        const next = exists
+          ? prev.map((e) => (e.id === saved.id ? saved : e))
+          : [...prev, saved];
+        return next.sort((a, b) =>
+          a.accountSchool.localeCompare(b.accountSchool)
+        );
+      });
+    }
+    return saved;
+  }
+
+  function handleSaveEvent(event: BookingEvent) {
+    persistEvent(event);
+    setEventModal(null);
+  }
+
+  function handleArchiveEvent(event: BookingEvent) {
+    const nextStatus = event.status === "archived" ? "active" : "archived";
+    persistEvent({
+      ...event,
+      status: nextStatus,
+      updatedAt: Date.now(),
+    });
+    if (nextStatus === "archived" && activeEventId === event.id) {
+      setActiveEventId(null);
+    }
+  }
+
+  function handleDeleteEvent(event: BookingEvent) {
+    if (
+      !window.confirm(
+        `Delete “${event.accountSchool}”? Facilitators stay in the directory.`
+      )
+    ) {
+      return;
+    }
+    if (persist) {
+      deleteEvent(event.id).catch((err) =>
+        window.alert(`Could not delete event: ${err.message}`)
+      );
+    } else {
+      setEvents((prev) => prev.filter((e) => e.id !== event.id));
+    }
+    if (activeEventId === event.id) setActiveEventId(null);
+    setEventModal(null);
+  }
+
+  function handleUpdateEvent(event: BookingEvent) {
+    persistEvent(event);
+  }
+
+  function handleAddPlacement(placement: EventPlacement) {
+    if (!activeEvent) return;
+    persistEvent({
+      ...activeEvent,
+      placements: [...activeEvent.placements, placement],
+      updatedAt: Date.now(),
+    });
+    setAddingPlacement(false);
+  }
+
+  function handleDeleteTemplate(template: EmailTemplate) {
+    if (!window.confirm(`Delete template “${template.name}”?`)) return;
+    if (persist) {
+      deleteTemplate(template.id).catch((err) =>
+        window.alert(`Could not delete template: ${err.message}`)
+      );
+    } else {
+      setTemplates((prev) => prev.filter((t) => t.id !== template.id));
+    }
+  }
+
+  async function handleImportTemplates(drafts: ParsedTemplateRow[]) {
+    const uid = user?.uid || "demo";
+    const email = (user?.email || "demo@local").toLowerCase();
+    const now = Date.now();
+    const created: EmailTemplate[] = drafts.map((d, i) => ({
+      id: crypto.randomUUID(),
+      name: d.name,
+      purpose: d.purpose,
+      subject: d.subject,
+      body: d.body,
+      createdByUid: uid,
+      createdByEmail: email,
+      updatedByUid: uid,
+      updatedByEmail: email,
+      createdAt: now + i,
+      updatedAt: now + i,
+    }));
+    if (persist) {
+      await saveTemplates(created);
+    } else {
+      setTemplates((prev) =>
+        [...prev, ...created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+    }
+  }
+
   function viewLabel(): string {
     if (view === "archived") return "Archived";
     if (view === "groups") return "Groups";
@@ -410,10 +677,20 @@ export default function App() {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar
+        section={section}
+        onSectionChange={(s) => {
+          setSection(s);
+          setActiveGroupId(null);
+          setActiveEventId(null);
+          setAddingPlacement(false);
+          resetPage();
+        }}
         activeView={view}
         onViewChange={(v) => {
+          setSection("directory");
           setView(v);
           setActiveGroupId(null);
+          setActiveEventId(null);
           resetPage();
         }}
         counts={counts}
@@ -428,31 +705,139 @@ export default function App() {
         {/* Top header */}
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <div className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4 text-slate-400" />
-            <span className="text-slate-400">Directory</span>
-            <ChevronRight className="h-4 w-4 text-slate-300" />
-            {showingGroupDetail && activeGroup ? (
+            {showingTemplates ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveGroupId(null);
-                    resetPage();
-                  }}
-                  className="text-slate-400 transition-colors hover:text-slate-700"
-                >
-                  Groups
-                </button>
-                <ChevronRight className="h-4 w-4 text-slate-300" />
-                <span className="font-semibold text-slate-800">
-                  {activeGroup.name}
-                </span>
+                <FileText className="h-4 w-4 text-slate-400" />
+                <span className="font-semibold text-slate-800">Templates</span>
+              </>
+            ) : showingEvents ? (
+              <>
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+                {showingEventDetail && activeEvent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveEventId(null);
+                        setAddingPlacement(false);
+                      }}
+                      className="text-slate-400 transition-colors hover:text-slate-700"
+                    >
+                      Events
+                    </button>
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                    <span className="font-semibold text-slate-800">
+                      {activeEvent.accountSchool}
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-semibold text-slate-800">Events</span>
+                )}
               </>
             ) : (
-              <span className="font-semibold text-slate-800">{viewLabel()}</span>
+              <>
+                <Users className="h-4 w-4 text-slate-400" />
+                <span className="text-slate-400">Directory</span>
+                <ChevronRight className="h-4 w-4 text-slate-300" />
+                {showingGroupDetail && activeGroup ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveGroupId(null);
+                        resetPage();
+                      }}
+                      className="text-slate-400 transition-colors hover:text-slate-700"
+                    >
+                      Groups
+                    </button>
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                    <span className="font-semibold text-slate-800">
+                      {activeGroup.name}
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-semibold text-slate-800">
+                    {viewLabel()}
+                  </span>
+                )}
+              </>
             )}
           </div>
           <div className="flex items-center gap-3">
+            {showingTemplates && (
+              <>
+                <button
+                  onClick={() => setImportingTemplates(true)}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import from Doc
+                </button>
+                <button
+                  onClick={() => setTemplateModal("new")}
+                  className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  New template
+                </button>
+              </>
+            )}
+            {showingEventsList && (
+              <button
+                onClick={() => setEventModal("new")}
+                className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+              >
+                <Plus className="h-4 w-4" />
+                New event
+              </button>
+            )}
+            {showingEventDetail && activeEvent && (
+              <>
+                <button
+                  onClick={() => setEventModal(activeEvent)}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit event
+                </button>
+                {user?.email && (
+                  <button
+                    onClick={() => {
+                      const ids = new Set(
+                        activeEvent.placements
+                          .filter((p) => !p.facilitatorDropped)
+                          .map((p) => p.facilitatorId)
+                      );
+                      setEmailModal({
+                        name: activeEvent.accountSchool,
+                        title: "Email event",
+                        members: activeFacilitators.filter((f) =>
+                          ids.has(f.id)
+                        ),
+                      });
+                    }}
+                    disabled={activeEvent.placements.length === 0}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={
+                      activeEvent.placements.length === 0
+                        ? "Add facilitators before emailing the event"
+                        : "Email facilitators placed at this event via Gmail"
+                    }
+                  >
+                    <Mail className="h-4 w-4" />
+                    Email event
+                  </button>
+                )}
+                <button
+                  onClick={() => setAddingPlacement(true)}
+                  className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add facilitator
+                </button>
+              </>
+            )}
             {showingGroupDetail && activeGroup && (
               <>
                 <button
@@ -462,6 +847,29 @@ export default function App() {
                   <Pencil className="h-4 w-4" />
                   Edit group
                 </button>
+                {user?.email && (
+                  <button
+                    onClick={() =>
+                      setEmailModal({
+                        name: activeGroup.name,
+                        title: "Email group",
+                        members: activeFacilitators.filter((f) =>
+                          activeGroup.facilitatorIds.includes(f.id)
+                        ),
+                      })
+                    }
+                    disabled={activeGroup.facilitatorIds.length === 0}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={
+                      activeGroup.facilitatorIds.length === 0
+                        ? "Add facilitators before emailing the group"
+                        : "Email everyone in this group via Gmail"
+                    }
+                  >
+                    <Mail className="h-4 w-4" />
+                    Email group
+                  </button>
+                )}
                 <button
                   onClick={() => setMembersModal(activeGroup)}
                   className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
@@ -480,7 +888,10 @@ export default function App() {
                 New Group
               </button>
             )}
-            {!showingGroupsList && !showingGroupDetail && view !== "archived" && (
+            {section === "directory" &&
+              !showingGroupsList &&
+              !showingGroupDetail &&
+              view !== "archived" && (
               <button
                 onClick={() => setAdding(true)}
                 className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
@@ -492,7 +903,32 @@ export default function App() {
           </div>
         </header>
 
-        {showingGroupsList ? (
+        {showingTemplates ? (
+          <TemplatesPage
+            templates={templates}
+            onCreate={() => setTemplateModal("new")}
+            onEdit={(t) => setTemplateModal(t)}
+            onDelete={handleDeleteTemplate}
+            onImport={() => setImportingTemplates(true)}
+          />
+        ) : showingEventDetail && activeEvent ? (
+          <EventDetailPage
+            event={activeEvent}
+            facilitators={data}
+            onUpdateEvent={handleUpdateEvent}
+            onAddPlacement={() => setAddingPlacement(true)}
+          />
+        ) : showingEventsList ? (
+          <EventsPage
+            events={events}
+            facilitators={activeFacilitators}
+            onOpenEvent={(id) => setActiveEventId(id)}
+            onCreateEvent={() => setEventModal("new")}
+            onEditEvent={(e) => setEventModal(e)}
+            onArchiveEvent={handleArchiveEvent}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        ) : showingGroupsList ? (
           <GroupsPage
             groups={groups}
             facilitators={activeFacilitators}
@@ -827,6 +1263,47 @@ export default function App() {
           facilitators={activeFacilitators}
           onClose={() => setMembersModal(null)}
           onSave={handleSaveGroup}
+        />
+      )}
+      {emailModal && user?.email && (
+        <GroupEmailModal
+          audienceName={emailModal.name}
+          title={emailModal.title}
+          members={emailModal.members}
+          templates={templates}
+          senderEmail={user.email}
+          onClose={() => setEmailModal(null)}
+        />
+      )}
+      {templateModal && (
+        <TemplateModal
+          initial={templateModal === "new" ? null : templateModal}
+          onClose={() => setTemplateModal(null)}
+          onSave={handleSaveTemplate}
+        />
+      )}
+      {importingTemplates && (
+        <TemplateImportModal
+          onClose={() => setImportingTemplates(false)}
+          onImport={handleImportTemplates}
+        />
+      )}
+      {eventModal && (
+        <EventModal
+          initial={eventModal === "new" ? null : eventModal}
+          onClose={() => setEventModal(null)}
+          onSave={handleSaveEvent}
+        />
+      )}
+      {addingPlacement && activeEvent && (
+        <AddPlacementModal
+          eventName={activeEvent.accountSchool}
+          facilitators={activeFacilitators}
+          existingFacilitatorIds={activeEvent.placements.map(
+            (p) => p.facilitatorId
+          )}
+          onClose={() => setAddingPlacement(false)}
+          onAdd={handleAddPlacement}
         />
       )}
       {addToGroupFor && (

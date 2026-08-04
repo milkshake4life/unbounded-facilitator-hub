@@ -23,6 +23,13 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+/** Firestore rejects `undefined` field values — omit them before writing. */
+function forFirestore(f: Facilitator): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(f).filter(([, v]) => v !== undefined)
+  );
+}
+
 function emailKey(f: Facilitator): string {
   return (f.unboundedEmail || f.personalEmail || "").trim().toLowerCase();
 }
@@ -51,7 +58,7 @@ export function subscribeFacilitators(
 /** Create or update a single facilitator (used by the Add/Edit form). */
 export async function saveFacilitator(f: Facilitator): Promise<void> {
   if (!db) throw new Error("Firestore is not configured.");
-  await setDoc(doc(db, COLLECTION, f.id), f);
+  await setDoc(doc(db, COLLECTION, f.id), forFirestore(f));
 }
 
 export async function deleteFacilitator(id: string): Promise<void> {
@@ -150,7 +157,7 @@ export async function replaceAllFacilitators(
 
   for (const group of chunk(incoming, 450)) {
     const batch = writeBatch(db);
-    group.forEach((f) => batch.set(doc(db!, COLLECTION, f.id), f));
+    group.forEach((f) => batch.set(doc(db!, COLLECTION, f.id), forFirestore(f)));
     await batch.commit();
   }
 
@@ -208,7 +215,7 @@ export async function mergeFacilitatorsByEmail(
 
   for (const group of chunk(writes, 450)) {
     const batch = writeBatch(db);
-    group.forEach((f) => batch.set(doc(db!, COLLECTION, f.id), f));
+    group.forEach((f) => batch.set(doc(db!, COLLECTION, f.id), forFirestore(f)));
     await batch.commit();
   }
 

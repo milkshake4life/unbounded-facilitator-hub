@@ -34,7 +34,7 @@ interface Window {
     picker: Record<string, unknown> & {
       PickerBuilder: new () => GooglePickerBuilder;
       DocsView: new (viewId?: unknown) => GoogleDocsView;
-      ViewId: { SPREADSHEETS: unknown; FOLDERS: unknown };
+      ViewId: { SPREADSHEETS: unknown; DOCS: unknown; FOLDERS: unknown };
       Action: { PICKED: string; CANCEL: string };
       Response: { ACTION: string; DOCUMENTS: string };
       Document: { ID: string; NAME: string; URL: string };

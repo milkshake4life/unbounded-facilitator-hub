@@ -6,11 +6,16 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? "";
 
 // drive.file → the specific file picked; spreadsheets.readonly → read cell
-// values; drive.readonly → list a headshot/resume folder and download files.
+// values; drive.readonly → list folders, download files, export Docs as HTML.
 const SCOPES =
   "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly";
 
 export const isGoogleConfigured = Boolean(CLIENT_ID && API_KEY);
+
+export interface PickedGoogleFile {
+  id: string;
+  name: string;
+}
 
 interface PickedSpreadsheet {
   id: string;
@@ -88,21 +93,25 @@ export async function getAccessToken(forceConsent = false): Promise<string> {
   });
 }
 
-/** Open the Google Picker and resolve with the chosen spreadsheet (or null). */
-export async function pickSpreadsheet(token: string): Promise<PickedSpreadsheet | null> {
-  await ensurePicker();
-  const picker = window.google!.picker;
-
-  return new Promise<PickedSpreadsheet | null>((resolve) => {
-    const view = new picker.DocsView(picker.ViewId.SPREADSHEETS)
+function openPicker(
+  token: string,
+  options: {
+    viewId: unknown;
+    mimeTypes: string;
+    title: string;
+  }
+): Promise<PickedGoogleFile | null> {
+  return new Promise<PickedGoogleFile | null>((resolve) => {
+    const picker = window.google!.picker;
+    const view = new picker.DocsView(options.viewId)
       .setIncludeFolders(false)
-      .setMimeTypes("application/vnd.google-apps.spreadsheet");
+      .setMimeTypes(options.mimeTypes);
 
     const built = new picker.PickerBuilder()
       .addView(view)
       .setOAuthToken(token)
       .setDeveloperKey(API_KEY)
-      .setTitle("Select the facilitator spreadsheet")
+      .setTitle(options.title)
       .setCallback((data) => {
         const action = data[picker.Response.ACTION];
         if (action === picker.Action.PICKED) {
@@ -124,6 +133,64 @@ export async function pickSpreadsheet(token: string): Promise<PickedSpreadsheet 
 
     built.setVisible(true);
   });
+}
+
+/** Open the Google Picker and resolve with the chosen spreadsheet (or null). */
+export async function pickSpreadsheet(
+  token: string
+): Promise<PickedSpreadsheet | null> {
+  await ensurePicker();
+  return openPicker(token, {
+    viewId: window.google!.picker.ViewId.SPREADSHEETS,
+    mimeTypes: "application/vnd.google-apps.spreadsheet",
+    title: "Select the facilitator spreadsheet",
+  });
+}
+
+/** Open the Google Picker for a Google Doc (template library). */
+export async function pickGoogleDoc(
+  token: string
+): Promise<PickedGoogleFile | null> {
+  await ensurePicker();
+  return openPicker(token, {
+    viewId: window.google!.picker.ViewId.DOCS,
+    mimeTypes: "application/vnd.google-apps.document",
+    title: "Select the facilitator communication templates Doc",
+  });
+}
+
+/**
+ * Export a Google Doc as HTML via the Drive API (uses drive.readonly).
+ * Tables in the Doc become HTML <table> elements we can parse.
+ */
+export async function exportGoogleDocHtml(
+  token: string,
+  fileId: string
+): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+      fileId
+    )}/export?mimeType=${encodeURIComponent("text/html")}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body?.error?.message ?? "";
+    } catch {
+      // ignore
+    }
+    if (res.status === 403 || res.status === 401) {
+      throw new Error(
+        `Could not export the Doc (${res.status}). Make sure you have access and the Google Drive API is enabled.${detail ? ` — ${detail}` : ""}`
+      );
+    }
+    throw new Error(
+      `Could not export the Doc (${res.status}).${detail ? ` — ${detail}` : ""}`
+    );
+  }
+  return res.text();
 }
 
 interface SheetsMetaResponse {

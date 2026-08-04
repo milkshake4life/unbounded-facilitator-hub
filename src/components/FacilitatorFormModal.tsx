@@ -56,11 +56,13 @@ export function FacilitatorFormModal({
   const [gradeBands, setGradeBands] = useState<GradeBand[]>(
     initial?.gradeBands ?? []
   );
-  const [availability, setAvailability] = useState<Availability>(
-    initial?.availability ?? "Flexibility throughout the year"
+  // "" means unanswered — never guess a default the facilitator didn't pick.
+  const [availability, setAvailability] = useState<Availability | "">(
+    initial?.availability ?? ""
   );
-  const [availableShortNotice, setAvailableShortNotice] =
-    useState<ShortNotice>(initial?.availableShortNotice ?? "Maybe");
+  const [availableShortNotice, setAvailableShortNotice] = useState<
+    ShortNotice | ""
+  >(initial?.availableShortNotice ?? "");
   const [bio, setBio] = useState(initial?.bio ?? "");
 
   function togglePathway(p: Pathway) {
@@ -97,9 +99,9 @@ export function FacilitatorFormModal({
       cellPhone: cellPhone.trim(),
       emergencyContactName: initial?.emergencyContactName ?? "",
       emergencyContactNumber: initial?.emergencyContactNumber ?? "",
-      hasPolo: initial?.hasPolo ?? false,
-      poloStyle: initial?.poloStyle ?? "Unisex Cut",
-      shirtSize: initial?.shirtSize ?? "M",
+      hasPolo: initial?.hasPolo,
+      poloStyle: initial?.poloStyle,
+      shirtSize: initial?.shirtSize,
       pathways,
       gradeBands,
       comfortByGradeBand,
@@ -107,9 +109,9 @@ export function FacilitatorFormModal({
       facilitatedSummit: initial?.facilitatedSummit ?? false,
       facilitatedInService: initial?.facilitatedInService ?? false,
       otherPrograms: initial?.otherPrograms ?? [],
-      availability,
+      availability: availability || undefined,
       availabilityOther: initial?.availabilityOther,
-      availableShortNotice,
+      availableShortNotice: availableShortNotice || undefined,
       currentEmployer: currentEmployer.trim() || "Independent Consultant",
       jobTitle: jobTitle.trim() || "Facilitator",
       roleDescription: roleDescription.trim(),
@@ -297,10 +299,11 @@ export function FacilitatorFormModal({
               <select
                 value={availability}
                 onChange={(e) =>
-                  setAvailability(e.target.value as Availability)
+                  setAvailability(e.target.value as Availability | "")
                 }
                 className={inputClass}
               >
+                <option value="">Not provided</option>
                 {AVAILABILITY_OPTIONS.map((a) => (
                   <option key={a} value={a}>
                     {a}
@@ -312,10 +315,11 @@ export function FacilitatorFormModal({
               <select
                 value={availableShortNotice}
                 onChange={(e) =>
-                  setAvailableShortNotice(e.target.value as ShortNotice)
+                  setAvailableShortNotice(e.target.value as ShortNotice | "")
                 }
                 className={inputClass}
               >
+                <option value="">Not provided</option>
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
                 <option value="Maybe">Maybe</option>

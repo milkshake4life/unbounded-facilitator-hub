@@ -577,13 +577,16 @@ export function buildFacilitators(
     }
 
     const availabilityRaw = cell(row, mapping.availability);
-    const availability: Availability =
-      (mapping.availability >= 0 && matchEnum(availabilityRaw, AVAILABILITY_OPTIONS)) ||
-      "Flexibility throughout the year";
+    const availability: Availability | undefined =
+      mapping.availability >= 0
+        ? matchEnum(availabilityRaw, AVAILABILITY_OPTIONS) || undefined
+        : undefined;
 
     const shirtRaw = cell(row, mapping.shirtSize);
-    const shirtSize: ShirtSize =
-      (mapping.shirtSize >= 0 && matchEnum(shirtRaw.toUpperCase(), SHIRT_SIZES)) || "M";
+    const shirtSize: ShirtSize | undefined =
+      mapping.shirtSize >= 0
+        ? matchEnum(shirtRaw.toUpperCase(), SHIRT_SIZES) || undefined
+        : undefined;
 
     const slug = `${firstName}.${lastName}`.toLowerCase().replace(/[^a-z0-9.]/g, "");
     const id = `imp-${slug || "row"}-${Math.random().toString(36).slice(2, 8)}`;
@@ -601,8 +604,8 @@ export function buildFacilitators(
       cellPhone: cell(row, mapping.cellPhone),
       emergencyContactName: cell(row, mapping.emergencyContactName),
       emergencyContactNumber: cell(row, mapping.emergencyContactNumber),
-      hasPolo: mapping.hasPolo >= 0 ? toBoolean(cell(row, mapping.hasPolo)) : false,
-      poloStyle: "Unisex Cut",
+      hasPolo:
+        mapping.hasPolo >= 0 ? toBoolean(cell(row, mapping.hasPolo)) : undefined,
       shirtSize,
       pathways: mapping.pathways >= 0 ? toPathways(cell(row, mapping.pathways)) : [],
       gradeBands,
@@ -617,7 +620,9 @@ export function buildFacilitators(
         mapping.otherPrograms >= 0 ? splitPrograms(cell(row, mapping.otherPrograms)) : [],
       availability,
       availableShortNotice:
-        mapping.availableShortNotice >= 0 ? toShortNotice(cell(row, mapping.availableShortNotice)) : "Maybe",
+        mapping.availableShortNotice >= 0
+          ? toShortNotice(cell(row, mapping.availableShortNotice))
+          : undefined,
       currentEmployer: cell(row, mapping.currentEmployer) || "Independent Consultant",
       jobTitle: cell(row, mapping.jobTitle) || "Facilitator",
       roleDescription: cell(row, mapping.roleDescription),

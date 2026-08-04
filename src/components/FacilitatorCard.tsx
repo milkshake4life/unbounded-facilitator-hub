@@ -62,6 +62,11 @@ export function FacilitatorCard({
     facilitator.hasStoredHeadshot,
     facilitator.headshot
   );
+  const employer = facilitator.currentEmployer?.trim();
+  const location = [facilitator.city, facilitator.state]
+    .map((p) => p?.trim())
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div
@@ -159,8 +164,13 @@ export function FacilitatorCard({
 
       {/* Name + employer */}
       <h3 className="text-[15px] font-semibold text-slate-900">{fullName}</h3>
-      <p className="mt-0.5 text-sm text-slate-500">
-        {facilitator.currentEmployer}
+      <p
+        className={classNames(
+          "mt-0.5 text-sm",
+          employer ? "text-slate-500" : "text-slate-400"
+        )}
+      >
+        {employer || "Employer not provided"}
       </p>
 
       {/* Pathway chips */}
@@ -184,9 +194,14 @@ export function FacilitatorCard({
       </div>
 
       {/* Location */}
-      <p className="mt-2 flex items-center gap-1 text-xs text-slate-400">
+      <p
+        className={classNames(
+          "mt-2 flex items-center gap-1 text-xs",
+          location ? "text-slate-400" : "text-slate-300"
+        )}
+      >
         <MapPin className="h-3 w-3" />
-        {facilitator.city}, {facilitator.state}
+        {location || "Location not provided"}
       </p>
     </div>
   );

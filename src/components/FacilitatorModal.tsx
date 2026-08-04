@@ -55,6 +55,8 @@ export function FacilitatorModal({
 }: FacilitatorModalProps) {
   const [tab, setTab] = useState<TabId>("experience");
   const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const role = joinParts([facilitator.jobTitle, facilitator.currentEmployer]);
+  const location = joinParts([facilitator.city, facilitator.state], ", ");
   const headshotSrc = useHeadshotSrc(
     facilitator.id,
     facilitator.hasStoredHeadshot,
@@ -91,26 +93,42 @@ export function FacilitatorModal({
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 truncate text-sm text-slate-500">
-                {facilitator.jobTitle} · {facilitator.currentEmployer}
+              <p
+                className={classNames(
+                  "mt-0.5 truncate text-sm",
+                  role ? "text-slate-500" : "text-slate-400"
+                )}
+              >
+                {role || "Role not provided"}
               </p>
-              <p className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+              <p
+                className={classNames(
+                  "mt-1 flex items-center gap-1 text-xs",
+                  location ? "text-slate-400" : "text-slate-300"
+                )}
+              >
                 <MapPin className="h-3.5 w-3.5" />
-                {facilitator.city}, {facilitator.state}
+                {location || "Location not provided"}
               </p>
 
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {facilitator.pathways.map((p) => (
-                  <span
-                    key={p}
-                    className={classNames(
-                      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
-                      pathwayStyles[p]
-                    )}
-                  >
-                    {p}
+                {facilitator.pathways.length > 0 ? (
+                  facilitator.pathways.map((p) => (
+                    <span
+                      key={p}
+                      className={classNames(
+                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+                        pathwayStyles[p]
+                      )}
+                    >
+                      {p}
+                    </span>
+                  ))
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-400 ring-1 ring-inset ring-slate-200">
+                    No pathways indicated
                   </span>
-                ))}
+                )}
               </div>
             </div>
 
@@ -175,25 +193,32 @@ function ExperienceTab({ f }: { f: Facilitator }) {
   return (
     <div className="space-y-6">
       <Section icon={<Award className="h-4 w-4" />} title="Pathways">
-        <div className="flex flex-wrap gap-1.5">
-          {f.pathways.map((p) => (
-            <span
-              key={p}
-              className={classNames(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
-                pathwayStyles[p]
-              )}
-            >
-              {p}
-            </span>
-          ))}
-        </div>
+        {f.pathways.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {f.pathways.map((p) => (
+              <span
+                key={p}
+                className={classNames(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+                  pathwayStyles[p]
+                )}
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">None indicated</p>
+        )}
       </Section>
 
       <Section
         icon={<GraduationCap className="h-4 w-4" />}
         title="Grade bands & comfort level"
       >
+        {f.gradeBands.length === 0 && (
+          <p className="text-sm text-slate-400">None indicated</p>
+        )}
         <div className="space-y-1.5">
           {f.gradeBands.map((g) => {
             const comfort = f.comfortByGradeBand[g as GradeBand];
@@ -402,12 +427,12 @@ function ProfessionalTab({ f }: { f: Facilitator }) {
       <DetailRow
         icon={<FileText className="h-4 w-4" />}
         label="Role & responsibilities"
-        value={f.roleDescription || "—"}
+        value={f.roleDescription}
       />
       <DetailRow
         icon={<Building2 className="h-4 w-4" />}
         label="School / district relationships"
-        value={f.districtRelationships || "—"}
+        value={f.districtRelationships}
       />
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-slate-400">
@@ -453,32 +478,37 @@ function ProfessionalTab({ f }: { f: Facilitator }) {
 }
 
 function ContactAvailabilityTab({ f }: { f: Facilitator }) {
+  const cityStateZip = joinParts(
+    [joinParts([f.city, f.state], ", "), f.zipCode],
+    " "
+  );
+  const address = joinParts([f.streetAddress, cityStateZip], ", ");
+  const emergencyContact = joinParts([
+    f.emergencyContactName,
+    f.emergencyContactNumber,
+  ]);
+  const gear = joinParts([
+    f.hasPolo === undefined ? "" : f.hasPolo ? "Has polo" : "Needs polo",
+    f.poloStyle,
+    f.shirtSize && `Size ${f.shirtSize}`,
+  ]);
+  const availability =
+    f.availability === "Other" && f.availabilityOther
+      ? f.availabilityOther
+      : f.availability;
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
         <DetailRow
           icon={<Mail className="h-4 w-4" />}
           label="UnboundEd email"
-          value={
-            <a
-              href={`mailto:${f.unboundedEmail}`}
-              className="text-brand-700 hover:underline"
-            >
-              {f.unboundedEmail}
-            </a>
-          }
+          value={<MailLink address={f.unboundedEmail} />}
         />
         <DetailRow
           icon={<Mail className="h-4 w-4" />}
           label="Personal email"
-          value={
-            <a
-              href={`mailto:${f.personalEmail}`}
-              className="text-brand-700 hover:underline"
-            >
-              {f.personalEmail}
-            </a>
-          }
+          value={<MailLink address={f.personalEmail} />}
         />
         <DetailRow
           icon={<Phone className="h-4 w-4" />}
@@ -488,12 +518,12 @@ function ContactAvailabilityTab({ f }: { f: Facilitator }) {
         <DetailRow
           icon={<Home className="h-4 w-4" />}
           label="Address"
-          value={`${f.streetAddress}, ${f.city}, ${f.state} ${f.zipCode}`}
+          value={address}
         />
         <DetailRow
           icon={<ShieldAlert className="h-4 w-4" />}
           label="Emergency contact"
-          value={`${f.emergencyContactName} · ${f.emergencyContactNumber}`}
+          value={emergencyContact}
         />
       </div>
 
@@ -502,26 +532,30 @@ function ContactAvailabilityTab({ f }: { f: Facilitator }) {
           icon={<CalendarClock className="h-4 w-4" />}
           title="Typical availability"
         >
-          <p className="text-sm text-slate-700">
-            {f.availability === "Other" && f.availabilityOther
-              ? f.availabilityOther
-              : f.availability}
-          </p>
+          {availability ? (
+            <p className="text-sm text-slate-700">{availability}</p>
+          ) : (
+            <p className="text-sm text-slate-400">Not provided</p>
+          )}
         </Section>
 
         <Section icon={<Zap className="h-4 w-4" />} title="Available on short notice">
-          <span
-            className={classNames(
-              "inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
-              f.availableShortNotice === "Yes"
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
-                : f.availableShortNotice === "Maybe"
-                  ? "bg-amber-50 text-amber-700 ring-amber-600/20"
-                  : "bg-slate-100 text-slate-500 ring-slate-500/20"
-            )}
-          >
-            {f.availableShortNotice}
-          </span>
+          {f.availableShortNotice ? (
+            <span
+              className={classNames(
+                "inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ring-1 ring-inset",
+                f.availableShortNotice === "Yes"
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+                  : f.availableShortNotice === "Maybe"
+                    ? "bg-amber-50 text-amber-700 ring-amber-600/20"
+                    : "bg-slate-100 text-slate-500 ring-slate-500/20"
+              )}
+            >
+              {f.availableShortNotice}
+            </span>
+          ) : (
+            <p className="text-sm text-slate-400">Not provided</p>
+          )}
           <p className="mt-2 text-xs italic text-slate-400">
             Sometimes events get booked with a short lead time, or changes require
             another facilitator.
@@ -533,12 +567,8 @@ function ContactAvailabilityTab({ f }: { f: Facilitator }) {
         <DetailRow
           icon={<Shirt className="h-4 w-4" />}
           label="UnboundEd gear"
-          value={
-            <>
-              {f.hasPolo ? "Has polo" : "Needs polo"} · {f.poloStyle} · Size{" "}
-              {f.shirtSize}
-            </>
-          }
+          value={gear}
+          placeholder="No gear preferences on file"
         />
       </div>
     </div>
@@ -609,11 +639,19 @@ function DetailRow({
   icon,
   label,
   value,
+  placeholder = "Not provided",
 }: {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
+  /** Shown greyed out when `value` is blank, so gaps read as "we don't know". */
+  placeholder?: string;
 }) {
+  const isBlank =
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim() === "");
+
   return (
     <div className="flex items-start gap-3">
       <span className="mt-0.5 text-slate-400">{icon}</span>
@@ -621,8 +659,36 @@ function DetailRow({
         <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
           {label}
         </p>
-        <p className="text-sm text-slate-700">{value}</p>
+        <p
+          className={classNames(
+            "text-sm",
+            isBlank ? "text-slate-400" : "text-slate-700"
+          )}
+        >
+          {isBlank ? placeholder : value}
+        </p>
       </div>
     </div>
   );
+}
+
+function MailLink({ address }: { address?: string }) {
+  const email = address?.trim();
+  if (!email) return <span className="text-slate-400">Not provided</span>;
+  return (
+    <a href={`mailto:${email}`} className="text-brand-700 hover:underline">
+      {email}
+    </a>
+  );
+}
+
+/** Join only the pieces we actually have, so partial data never reads as complete. */
+function joinParts(
+  parts: (string | undefined | false)[],
+  separator = " · "
+): string {
+  return parts
+    .map((p) => (p ? p.trim() : ""))
+    .filter(Boolean)
+    .join(separator);
 }

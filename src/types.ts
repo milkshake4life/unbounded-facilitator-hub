@@ -52,6 +52,26 @@ export interface FacilitatorGroup {
   updatedAt: number;
 }
 
+/**
+ * Shared team email template (Communication / Purpose / Text from the
+ * facilitator communications sheet). Any allowlisted user can CRUD.
+ */
+export interface EmailTemplate {
+  id: string;
+  /** Communication title, e.g. "Facilitator Availability (Rolanda)". */
+  name: string;
+  /** Purpose/Timeline note, e.g. "Event >= 75% probability". */
+  purpose: string;
+  subject: string;
+  body: string;
+  createdByUid: string;
+  createdByEmail: string;
+  updatedByUid: string;
+  updatedByEmail: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Facilitator {
   id: string;
 
@@ -68,10 +88,10 @@ export interface Facilitator {
   emergencyContactName: string;
   emergencyContactNumber: string;
 
-  // UnboundEd gear
-  hasPolo: boolean;
-  poloStyle: ShirtStyle;
-  shirtSize: ShirtSize;
+  // UnboundEd gear — left undefined when the facilitator never answered.
+  hasPolo?: boolean;
+  poloStyle?: ShirtStyle;
+  shirtSize?: ShirtSize;
 
   // UnboundEd experience
   pathways: Pathway[];
@@ -82,10 +102,10 @@ export interface Facilitator {
   facilitatedInService: boolean;
   otherPrograms: string[];
 
-  // Availability
-  availability: Availability;
+  // Availability — left undefined when the facilitator never answered.
+  availability?: Availability;
   availabilityOther?: string;
-  availableShortNotice: ShortNotice;
+  availableShortNotice?: ShortNotice;
 
   // Professional experience
   currentEmployer: string;
@@ -154,3 +174,90 @@ export const STANDARDS_INSTITUTE_LABELS: Record<
   both: "Yes — national & local",
   no: "No",
 };
+
+/* ---- Events / placements (booking sheet) ---- */
+
+export type EventType =
+  | "Executive Coaching"
+  | "GLEAM Learning Walk"
+  | "In Service Workshop"
+  | "Standards Institute"
+  | "Summit"
+  | "Custom";
+
+export type EventMode = "In-Person" | "Virtual";
+
+/**
+ * One facilitator assignment inside an event (a row on the booking sheet).
+ * Pathway/section here are placement-specific, not directory capabilities.
+ */
+export interface EventPlacement {
+  id: string;
+  facilitatorId: string;
+  pathway: string;
+  section: string;
+  facilitatorConfirmed: boolean;
+  facilitatorDropped: boolean;
+  calHoldSent: boolean;
+  contractRequested: boolean;
+  notes: string;
+}
+
+/**
+ * A bookable event keyed by Account | School (choice A title).
+ * Shared across the team — any allowlisted user can read/write.
+ */
+export interface BookingEvent {
+  id: string;
+  /** Account | School — primary display name. */
+  accountSchool: string;
+  eventType: EventType;
+  eventMode: EventMode;
+  /** Optional start date (YYYY-MM-DD). Parked until meaning is clarified. */
+  startDate: string;
+  /** True when the event itself is officially signed off / confirmed. */
+  eventConfirmed: boolean;
+  /** Shared event-level notes (e.g. capacity). */
+  notes: string;
+  placements: EventPlacement[];
+  status: FacilitatorStatus;
+  createdByUid: string;
+  createdByEmail: string;
+  updatedByUid: string;
+  updatedByEmail: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const EVENT_TYPES: EventType[] = [
+  "Executive Coaching",
+  "GLEAM Learning Walk",
+  "In Service Workshop",
+  "Standards Institute",
+  "Summit",
+  "Custom",
+];
+
+export const EVENT_MODES: EventMode[] = ["In-Person", "Virtual"];
+
+/** Suggested placement pathways from the booking sheet (free text also allowed). */
+export const PLACEMENT_PATHWAY_OPTIONS: string[] = [
+  "ELA K-5",
+  "ELA 6-12",
+  "Math K-5",
+  "Math 6-12",
+  "Leadership",
+  "UPP K-12 (M1: Price of Partnership)",
+  "UPP K-12 (M2: Scaffolding)",
+];
+
+export const PLACEMENT_SECTION_OPTIONS: string[] = [
+  "Section 1",
+  "Section 2",
+  "Section 3",
+  "Section 4",
+  "Section 5",
+  "Section 6",
+  "AM Section",
+  "PM Section",
+];
