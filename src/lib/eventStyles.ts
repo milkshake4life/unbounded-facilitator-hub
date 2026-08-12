@@ -1,4 +1,9 @@
-import type { EventMode, EventType } from "../types";
+import type {
+  EventMode,
+  EventStage,
+  EventType,
+  PlacementStage,
+} from "../types";
 
 /** Chip styles for event type (mirrors booking-sheet colors). */
 export const eventTypeStyles: Record<EventType, string> = {
@@ -23,4 +28,21 @@ export const eventTypeShortLabels: Record<EventType, string> = {
   "Standards Institute": "SI",
   Summit: "Summit",
   Custom: "Custom",
+};
+
+/** Pipeline stage chips — warmth increases as the booking firms up. */
+export const eventStageStyles: Record<EventStage, string> = {
+  prospective: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  likely: "bg-amber-50 text-amber-800 ring-amber-600/20",
+  contracted: "bg-brand-50 text-brand-700 ring-brand-600/20",
+  delivered: "bg-emerald-50 text-emerald-800 ring-emerald-600/20",
+};
+
+/** Per-facilitator status chips, matching the hold → confirm → contract flow. */
+export const placementStageStyles: Record<PlacementStage, string> = {
+  proposed: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  availability: "bg-sky-50 text-sky-700 ring-sky-600/20",
+  hold: "bg-amber-50 text-amber-800 ring-amber-600/20",
+  confirmed: "bg-brand-50 text-brand-700 ring-brand-600/20",
+  contracted: "bg-emerald-50 text-emerald-800 ring-emerald-600/20",
 };

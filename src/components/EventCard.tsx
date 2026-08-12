@@ -8,12 +8,15 @@ import {
   Trash2,
 } from "lucide-react";
 import type { BookingEvent, Facilitator } from "../types";
+import { EVENT_STAGE_META } from "../types";
 import { classNames } from "../lib/ui";
 import {
   eventModeStyles,
+  eventStageStyles,
   eventTypeShortLabels,
   eventTypeStyles,
 } from "../lib/eventStyles";
+import { eventStaffing } from "../lib/eventModel";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { Avatar } from "./Avatar";
 
@@ -25,7 +28,7 @@ function placementPreview(
   const seen = new Set<string>();
   const out: Facilitator[] = [];
   for (const p of event.placements) {
-    if (seen.has(p.facilitatorId)) continue;
+    if (p.dropped || seen.has(p.facilitatorId)) continue;
     const f = byId.get(p.facilitatorId);
     if (!f) continue;
     seen.add(p.facilitatorId);
@@ -35,19 +38,13 @@ function placementPreview(
   return out;
 }
 
-function staffingSummary(event: BookingEvent): string {
-  const total = event.placements.length;
-  if (total === 0) return "No facilitators yet";
-  const confirmed = event.placements.filter(
-    (p) => p.facilitatorConfirmed && !p.facilitatorDropped
-  ).length;
-  const dropped = event.placements.filter((p) => p.facilitatorDropped).length;
-  const parts = [
-    `${total} ${total === 1 ? "placement" : "placements"}`,
-    `${confirmed} confirmed`,
-  ];
-  if (dropped > 0) parts.push(`${dropped} dropped`);
-  return parts.join(" · ");
+function planSummary(event: BookingEvent): string {
+  const pathways = event.pathways.length;
+  const sections = event.sections.length;
+  if (pathways === 0) return "No pathways yet";
+  return `${pathways} ${pathways === 1 ? "pathway" : "pathways"} · ${sections} ${
+    sections === 1 ? "section" : "sections"
+  }`;
 }
 
 interface EventCardProps {
@@ -70,9 +67,13 @@ export function EventCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isArchived = event.status === "archived";
+  const staffing = eventStaffing(event);
   const preview = placementPreview(event, facilitators);
-  const count = event.placements.length;
-  const extra = Math.max(0, count - preview.length);
+  const extra = Math.max(0, staffing.assigned - preview.length);
+  const fillPct =
+    staffing.seatsNeeded > 0
+      ? Math.min(100, (staffing.assigned / staffing.seatsNeeded) * 100)
+      : 0;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -166,12 +167,49 @@ export function EventCard({
         >
           {event.eventMode}
         </span>
-        {event.eventConfirmed && (
-          <span className="inline-flex items-center rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20">
-            Confirmed
-          </span>
-        )}
+        <span
+          className={classNames(
+            "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
+            eventStageStyles[event.stage]
+          )}
+        >
+          {EVENT_STAGE_META[event.stage].short}
+        </span>
       </div>
+
+      <p className="mt-3 text-xs text-slate-500">{planSummary(event)}</p>
+
+      {staffing.seatsNeeded > 0 && (
+        <div className="mt-2">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="text-slate-500">
+              <span
+                className={classNames(
+                  "font-semibold",
+                  staffing.openSeats === 0
+                    ? "text-emerald-700"
+                    : "text-amber-700"
+                )}
+              >
+                {staffing.assigned} of {staffing.seatsNeeded}
+              </span>{" "}
+              seats filled
+            </span>
+            {staffing.dropped > 0 && (
+              <span className="text-rose-600">{staffing.dropped} dropped</span>
+            )}
+          </div>
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={classNames(
+                "h-full rounded-full transition-all",
+                staffing.openSeats === 0 ? "bg-emerald-500" : "bg-amber-400"
+              )}
+              style={{ width: `${fillPct}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 flex min-h-8 items-center gap-2.5">
         {preview.length > 0 ? (
@@ -187,7 +225,7 @@ export function EventCard({
               )}
             </div>
             <p className="min-w-0 truncate text-sm text-slate-500">
-              {staffingSummary(event)}
+              {staffing.confirmed} confirmed
             </p>
           </>
         ) : (

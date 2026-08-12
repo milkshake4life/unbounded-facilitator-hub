@@ -1,266 +1,502 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import {
+  ArrowRight,
   CalendarDays,
-  Check,
-  StickyNote,
+  ChevronDown,
+  Layers,
+  Pencil,
+  Plus,
   Trash2,
-  UserPlus,
-  X,
 } from "lucide-react";
 import type {
   BookingEvent,
+  EventPathway,
   EventPlacement,
+  EventSection,
+  EventStage,
   Facilitator,
+} from "../types";
+import {
+  EVENT_STAGES,
+  EVENT_STAGE_META,
+  PLACEMENT_STAGE_META,
 } from "../types";
 import { classNames } from "../lib/ui";
 import {
   eventModeStyles,
   eventTypeStyles,
+  placementStageStyles,
 } from "../lib/eventStyles";
-import { useHeadshotSrc } from "../lib/useHeadshot";
-import { Avatar } from "./Avatar";
-
-type StatusKey = keyof Pick<
-  EventPlacement,
-  | "facilitatorConfirmed"
-  | "facilitatorDropped"
-  | "calHoldSent"
-  | "contractRequested"
->;
-
-const STATUS_TOGGLES: {
-  key: StatusKey;
-  label: string;
-  activeClass: string;
-  danger?: boolean;
-}[] = [
-  {
-    key: "facilitatorConfirmed",
-    label: "Facilitator confirmed",
-    activeClass: "bg-brand-600 text-white border-brand-600",
-  },
-  {
-    key: "facilitatorDropped",
-    label: "Dropped",
-    activeClass: "bg-rose-600 text-white border-rose-600",
-    danger: true,
-  },
-  {
-    key: "calHoldSent",
-    label: "Cal hold sent",
-    activeClass: "bg-slate-800 text-white border-slate-800",
-  },
-  {
-    key: "contractRequested",
-    label: "Contract requested",
-    activeClass: "bg-slate-800 text-white border-slate-800",
-  },
-];
+import {
+  createPlacement,
+  createSection,
+  eventNextStep,
+  eventStaffing,
+  pathwayStaffing,
+  placementsForSection,
+  sectionStaffing,
+  sectionsForPathway,
+  setPlacementStages,
+  stageAtLeast,
+  unassignedPlacements,
+} from "../lib/eventModel";
+import { useOutsideDismiss } from "../lib/useOutsideDismiss";
+import { EventSectionCard, type PlacementActions } from "./EventSectionCard";
+import { PathwayModal, type SectionPlan } from "./PathwayModal";
+import { SectionModal } from "./SectionModal";
+import { AssignFacilitatorModal } from "./AssignFacilitatorModal";
+import { DropFacilitatorModal } from "./DropFacilitatorModal";
+import { StageChangeModal } from "./StageChangeModal";
 
 interface EventDetailPageProps {
   event: BookingEvent;
   facilitators: Facilitator[];
   onUpdateEvent: (event: BookingEvent) => void;
-  onAddPlacement: () => void;
+}
+
+type PathwayModalState = EventPathway | "new" | null;
+type SectionModalState = { pathwayId: string; section: EventSection | null } | null;
+type AssignTarget = { pathwayId: string; sectionId: string } | null;
+
+function parseDate(value: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateRange(start: string, end: string): string | null {
+  const startDate = parseDate(start);
+  if (!startDate) return null;
+  const endDate = parseDate(end);
+
+  const dayMonth: Intl.DateTimeFormatOptions = { month: "long", day: "numeric" };
+  const full: Intl.DateTimeFormatOptions = { ...dayMonth, year: "numeric" };
+
+  if (!endDate || endDate.getTime() === startDate.getTime()) {
+    return startDate.toLocaleDateString(undefined, full);
+  }
+  // A range inside one month reads better as "June 12–14, 2026".
+  if (
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth()
+  ) {
+    return `${startDate.toLocaleDateString(undefined, dayMonth)}–${endDate.getDate()}, ${endDate.getFullYear()}`;
+  }
+  return `${startDate.toLocaleDateString(undefined, dayMonth)} – ${endDate.toLocaleDateString(undefined, full)}`;
 }
 
 export function EventDetailPage({
   event,
   facilitators,
   onUpdateEvent,
-  onAddPlacement,
 }: EventDetailPageProps) {
-  const [dropPrompt, setDropPrompt] = useState<{
-    placementId: string;
-    facilitatorName: string;
-    existingNotes: string;
-  } | null>(null);
+  const [pathwayModal, setPathwayModal] = useState<PathwayModalState>(null);
+  const [sectionModal, setSectionModal] = useState<SectionModalState>(null);
+  const [assignTarget, setAssignTarget] = useState<AssignTarget>(null);
+  const [dropTarget, setDropTarget] = useState<EventPlacement | null>(null);
+  const [stageChange, setStageChange] = useState<EventStage | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const byId = useMemo(
+  const facilitatorsById = useMemo(
     () => new Map(facilitators.map((f) => [f.id, f])),
     [facilitators]
   );
+  const sectionsById = useMemo(
+    () => new Map(event.sections.map((s) => [s.id, s])),
+    [event.sections]
+  );
+  const pathwaysById = useMemo(
+    () => new Map(event.pathways.map((p) => [p.id, p])),
+    [event.pathways]
+  );
 
-  const sorted = useMemo(() => {
-    return [...event.placements].sort((a, b) => {
-      const fa = byId.get(a.facilitatorId);
-      const fb = byId.get(b.facilitatorId);
-      const nameA = fa
-        ? `${fa.lastName} ${fa.firstName}`
-        : a.facilitatorId;
-      const nameB = fb
-        ? `${fb.lastName} ${fb.firstName}`
-        : b.facilitatorId;
-      const pathwayCmp = a.pathway.localeCompare(b.pathway);
-      if (pathwayCmp !== 0) return pathwayCmp;
-      const sectionCmp = a.section.localeCompare(b.section);
-      if (sectionCmp !== 0) return sectionCmp;
-      return nameA.localeCompare(nameB);
+  const staffing = eventStaffing(event);
+  const nextStep = eventNextStep(event);
+  const orphans = unassignedPlacements(event);
+  const dateLabel = formatDateRange(event.startDate, event.endDate);
+
+  function update(patch: Partial<BookingEvent>) {
+    onUpdateEvent({ ...event, ...patch, updatedAt: Date.now() });
+  }
+
+  /* ---- Pathways ---- */
+
+  function savePathway(pathway: EventPathway, plan: SectionPlan | null) {
+    const exists = event.pathways.some((p) => p.id === pathway.id);
+    const pathways = exists
+      ? event.pathways.map((p) => (p.id === pathway.id ? pathway : p))
+      : [...event.pathways, pathway];
+    const newSections =
+      plan && plan.count > 0
+        ? Array.from({ length: plan.count }, (_, i) =>
+            createSection(pathway.id, `Section ${i + 1}`, plan.seatsPerSection)
+          )
+        : [];
+    update({ pathways, sections: [...event.sections, ...newSections] });
+    setPathwayModal(null);
+  }
+
+  function deletePathway(pathway: EventPathway) {
+    const sections = sectionsForPathway(event, pathway.id);
+    const sectionIds = new Set(sections.map((s) => s.id));
+    const affected = event.placements.filter((p) => sectionIds.has(p.sectionId));
+    const warning = affected.length
+      ? ` This removes ${sections.length} ${sections.length === 1 ? "section" : "sections"} and ${affected.length} facilitator ${affected.length === 1 ? "placement" : "placements"}.`
+      : "";
+    if (!window.confirm(`Delete the “${pathway.name}” pathway?${warning}`)) return;
+    update({
+      pathways: event.pathways.filter((p) => p.id !== pathway.id),
+      sections: event.sections.filter((s) => !sectionIds.has(s.id)),
+      placements: event.placements.filter((p) => !sectionIds.has(p.sectionId)),
     });
-  }, [event.placements, byId]);
+  }
 
-  const confirmedCount = event.placements.filter(
-    (p) => p.facilitatorConfirmed && !p.facilitatorDropped
-  ).length;
+  /* ---- Sections ---- */
 
-  function patchPlacement(
-    placementId: string,
-    patch: Partial<EventPlacement>
-  ) {
-    onUpdateEvent({
-      ...event,
+  function saveSection(section: EventSection) {
+    const exists = event.sections.some((s) => s.id === section.id);
+    update({
+      sections: exists
+        ? event.sections.map((s) => (s.id === section.id ? section : s))
+        : [...event.sections, section],
+    });
+    setSectionModal(null);
+  }
+
+  function deleteSection(section: EventSection) {
+    const affected = placementsForSection(event, section.id);
+    const warning = affected.length
+      ? ` ${affected.length} facilitator ${affected.length === 1 ? "placement" : "placements"} will be removed with it.`
+      : "";
+    if (!window.confirm(`Delete “${section.name}”?${warning}`)) return;
+    update({
+      sections: event.sections.filter((s) => s.id !== section.id),
+      placements: event.placements.filter((p) => p.sectionId !== section.id),
+    });
+  }
+
+  /* ---- Placements ---- */
+
+  function assignFacilitators(target: NonNullable<AssignTarget>, ids: string[]) {
+    update({
+      placements: [
+        ...event.placements,
+        ...ids.map((id) =>
+          createPlacement(id, target.pathwayId, target.sectionId)
+        ),
+      ],
+    });
+    setAssignTarget(null);
+  }
+
+  function patchPlacement(id: string, patch: Partial<EventPlacement>) {
+    update({
       placements: event.placements.map((p) =>
-        p.id === placementId ? { ...p, ...patch } : p
+        p.id === id ? { ...p, ...patch } : p
       ),
-      updatedAt: Date.now(),
     });
   }
 
-  function removePlacement(placementId: string) {
-    if (!window.confirm("Remove this placement from the event?")) return;
-    onUpdateEvent({
-      ...event,
-      placements: event.placements.filter((p) => p.id !== placementId),
-      updatedAt: Date.now(),
-    });
+  const placementActions: PlacementActions = {
+    setStage: (placement, stage) => patchPlacement(placement.id, { stage }),
+    requestDrop: (placement) => setDropTarget(placement),
+    restore: (placement) =>
+      patchPlacement(placement.id, { dropped: false, dropReason: "" }),
+    remove: (placement) => {
+      const facilitator = facilitatorsById.get(placement.facilitatorId);
+      const name = facilitator
+        ? `${facilitator.firstName} ${facilitator.lastName}`
+        : "this facilitator";
+      if (!window.confirm(`Remove ${name} from this section?`)) return;
+      update({
+        placements: event.placements.filter((p) => p.id !== placement.id),
+      });
+    },
+    setNotes: (placement, notes) => patchPlacement(placement.id, { notes }),
+    move: (placement, toSectionId) => {
+      const section = sectionsById.get(toSectionId);
+      if (!section) return;
+      patchPlacement(placement.id, {
+        sectionId: toSectionId,
+        pathwayId: section.pathwayId,
+      });
+    },
+  };
+
+  /* ---- Guided next step ---- */
+
+  function runNextStep() {
+    switch (nextStep.kind) {
+      case "add_pathway":
+        setPathwayModal("new");
+        return;
+      case "add_section": {
+        const pathway = event.pathways[0];
+        if (pathway) setSectionModal({ pathwayId: pathway.id, section: null });
+        return;
+      }
+      case "assign": {
+        const section = event.sections.find(
+          (s) => sectionStaffing(event, s).openSeats > 0
+        );
+        if (section) {
+          setAssignTarget({
+            pathwayId: section.pathwayId,
+            sectionId: section.id,
+          });
+        }
+        return;
+      }
+      case "mark_likely":
+        setStageChange("likely");
+        return;
+      case "mark_contracted":
+        setStageChange("contracted");
+        return;
+      case "mark_delivered":
+        setStageChange("delivered");
+        return;
+      case "send_holds":
+        onUpdateEvent(setPlacementStages(event, nextStep.placementIds, "hold"));
+        return;
+      case "confirm_holds":
+        onUpdateEvent(
+          setPlacementStages(event, nextStep.placementIds, "confirmed")
+        );
+        return;
+      case "request_contracts":
+        onUpdateEvent(
+          setPlacementStages(event, nextStep.placementIds, "contracted")
+        );
+        return;
+      default:
+    }
   }
+
+  function applyStageChange(to: EventStage) {
+    update({ stage: to });
+    setStageChange(null);
+  }
+
+  /* ---- Assign modal context ---- */
+
+  const assignContext = useMemo(() => {
+    if (!assignTarget) return null;
+    const section = sectionsById.get(assignTarget.sectionId);
+    const pathway = pathwaysById.get(assignTarget.pathwayId);
+    if (!section || !pathway) return null;
+
+    const placedElsewhere = new Map<string, string[]>();
+    for (const placement of event.placements) {
+      if (placement.dropped || placement.sectionId === section.id) continue;
+      const other = sectionsById.get(placement.sectionId);
+      if (!other) continue;
+      const otherPathway = pathwaysById.get(other.pathwayId);
+      const label = otherPathway
+        ? `${otherPathway.name} · ${other.name}`
+        : other.name;
+      const existing = placedElsewhere.get(placement.facilitatorId) ?? [];
+      placedElsewhere.set(placement.facilitatorId, [...existing, label]);
+    }
+
+    return {
+      section,
+      pathway,
+      placedElsewhere,
+      alreadyInSection: new Set(
+        placementsForSection(event, section.id)
+          .filter((p) => !p.dropped)
+          .map((p) => p.facilitatorId)
+      ),
+      openSeats: sectionStaffing(event, section).openSeats,
+    };
+  }, [assignTarget, event, sectionsById, pathwaysById]);
+
+  const dropFacilitator = dropTarget
+    ? facilitatorsById.get(dropTarget.facilitatorId)
+    : null;
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span
-                className={classNames(
-                  "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
-                  eventTypeStyles[event.eventType]
-                )}
-              >
+      {/* Summary + pipeline */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-slate-900">
+              {event.accountSchool}
+            </h1>
+            {dateLabel && (
+              <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-slate-600">
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+                {dateLabel}
+              </p>
+            )}
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <Chip className={eventTypeStyles[event.eventType]}>
                 {event.eventType}
-              </span>
-              <span
-                className={classNames(
-                  "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
-                  eventModeStyles[event.eventMode]
-                )}
-              >
+              </Chip>
+              <Chip className={eventModeStyles[event.eventMode]}>
                 {event.eventMode}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateEvent({
-                    ...event,
-                    eventConfirmed: !event.eventConfirmed,
-                    updatedAt: Date.now(),
-                  })
-                }
-                className={classNames(
-                  "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors",
-                  event.eventConfirmed
-                    ? "border-brand-600 bg-brand-600 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                {event.eventConfirmed && <Check className="h-3 w-3" />}
-                Event confirmed
-              </button>
+              </Chip>
             </div>
-            {event.notes.trim() ? (
+            {event.notes.trim() && (
               <p className="mt-3 max-w-2xl text-sm text-slate-600">
                 {event.notes}
               </p>
-            ) : null}
-          </div>
-          <p className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-700">
-              {event.placements.length}
-            </span>{" "}
-            {event.placements.length === 1 ? "placement" : "placements"}
-            {event.placements.length > 0 && (
-              <>
-                {" · "}
-                <span className="font-semibold text-slate-700">
-                  {confirmedCount}
-                </span>{" "}
-                facilitators confirmed
-              </>
             )}
-          </p>
+          </div>
+          <StaffingSummary staffing={staffing} />
         </div>
+
+        <StageRail stage={event.stage} onSelect={setStageChange} />
+
+        <NextStepBanner nextStep={nextStep} onRun={runNextStep} />
+      </section>
+
+      {/* Staffing board */}
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Layers className="h-4 w-4 text-slate-400" />
+          Staffing plan
+        </h2>
+        <button
+          type="button"
+          onClick={() => setPathwayModal("new")}
+          className="flex items-center gap-1.5 rounded-lg border border-brand-600 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+        >
+          <Plus className="h-4 w-4" />
+          Add pathway
+        </button>
       </div>
 
-      {sorted.length === 0 ? (
-        <div className="mt-16 flex flex-col items-center justify-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-            <CalendarDays className="h-6 w-6" />
-          </div>
-          <p className="mt-3 text-sm font-medium text-slate-700">
-            No facilitators placed yet
-          </p>
-          <p className="max-w-sm text-sm text-slate-400">
-            Add facilitators from the directory and track confirmation, calendar
-            holds, and contracts for each placement.
-          </p>
-          <button
-            onClick={onAddPlacement}
-            className="mt-4 flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
-          >
-            <UserPlus className="h-4 w-4" />
-            Add facilitator
-          </button>
-        </div>
+      {event.pathways.length === 0 ? (
+        <EmptyBoard onAddPathway={() => setPathwayModal("new")} />
       ) : (
-        <ul className="mt-5 space-y-3">
-          {sorted.map((placement) => {
-            const facilitator = byId.get(placement.facilitatorId) ?? null;
-            const facilitatorName = facilitator
-              ? `${facilitator.firstName} ${facilitator.lastName}`
-              : "this facilitator";
-            return (
-              <PlacementRow
-                key={placement.id}
-                placement={placement}
-                facilitator={facilitator}
-                onToggle={(key) => {
-                  if (key === "facilitatorDropped") {
-                    if (placement.facilitatorDropped) {
-                      patchPlacement(placement.id, {
-                        facilitatorDropped: false,
-                      });
-                      return;
-                    }
-                    setDropPrompt({
-                      placementId: placement.id,
-                      facilitatorName,
-                      existingNotes: placement.notes,
-                    });
-                    return;
-                  }
-                  patchPlacement(placement.id, { [key]: !placement[key] });
-                }}
-                onNotesChange={(notes) =>
-                  patchPlacement(placement.id, { notes })
-                }
-                onRemove={() => removePlacement(placement.id)}
-              />
-            );
-          })}
-        </ul>
+        <div className="mt-4 flex flex-col gap-6">
+          {event.pathways.map((pathway) => (
+            <PathwayRow
+              key={pathway.id}
+              event={event}
+              pathway={pathway}
+              facilitatorsById={facilitatorsById}
+              actions={placementActions}
+              draggingId={draggingId}
+              onDragStateChange={setDraggingId}
+              onEditPathway={() => setPathwayModal(pathway)}
+              onDeletePathway={() => deletePathway(pathway)}
+              onAddSection={() =>
+                setSectionModal({ pathwayId: pathway.id, section: null })
+              }
+              onEditSection={(section) =>
+                setSectionModal({ pathwayId: pathway.id, section })
+              }
+              onDeleteSection={deleteSection}
+              onAssign={(sectionId) =>
+                setAssignTarget({ pathwayId: pathway.id, sectionId })
+              }
+            />
+          ))}
+        </div>
       )}
 
-      {dropPrompt && (
-        <DropReasonModal
-          facilitatorName={dropPrompt.facilitatorName}
-          initialNotes={dropPrompt.existingNotes}
-          onClose={() => setDropPrompt(null)}
-          onConfirm={(notes) => {
-            patchPlacement(dropPrompt.placementId, {
-              facilitatorDropped: true,
-              notes,
-            });
-            setDropPrompt(null);
+      {orphans.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {orphans.length} placement{orphans.length === 1 ? "" : "s"} without a
+            section
+          </p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Their section was deleted. Remove them or recreate the section to put
+            them back on the board.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              update({
+                placements: event.placements.filter(
+                  (p) => !orphans.some((o) => o.id === p.id)
+                ),
+              })
+            }
+            className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+          >
+            Clear them
+          </button>
+        </div>
+      )}
+
+      {/* Modals */}
+      {pathwayModal && (
+        <PathwayModal
+          initial={pathwayModal === "new" ? null : pathwayModal}
+          existingNames={event.pathways
+            .filter((p) => pathwayModal === "new" || p.id !== pathwayModal.id)
+            .map((p) => p.name)}
+          onClose={() => setPathwayModal(null)}
+          onSave={savePathway}
+        />
+      )}
+
+      {sectionModal && pathwaysById.get(sectionModal.pathwayId) && (
+        <SectionModal
+          pathwayId={sectionModal.pathwayId}
+          pathwayName={pathwaysById.get(sectionModal.pathwayId)!.name}
+          initial={sectionModal.section}
+          existingNames={sectionsForPathway(event, sectionModal.pathwayId)
+            .filter((s) => s.id !== sectionModal.section?.id)
+            .map((s) => s.name)}
+          onClose={() => setSectionModal(null)}
+          onSave={saveSection}
+        />
+      )}
+
+      {assignTarget && assignContext && (
+        <AssignFacilitatorModal
+          pathwayName={assignContext.pathway.name}
+          sectionName={assignContext.section.name}
+          openSeats={assignContext.openSeats}
+          facilitators={facilitators}
+          placedElsewhere={assignContext.placedElsewhere}
+          alreadyInSection={assignContext.alreadyInSection}
+          onClose={() => setAssignTarget(null)}
+          onAssign={(ids) => assignFacilitators(assignTarget, ids)}
+        />
+      )}
+
+      {stageChange && (
+        <StageChangeModal
+          eventName={event.accountSchool}
+          from={event.stage}
+          to={stageChange}
+          placedCount={staffing.assigned}
+          awaitingHoldCount={
+            event.placements.filter(
+              (p) => !p.dropped && !stageAtLeast(p.stage, "hold")
+            ).length
+          }
+          awaitingConfirmCount={
+            event.placements.filter(
+              (p) => !p.dropped && !stageAtLeast(p.stage, "confirmed")
+            ).length
+          }
+          onClose={() => setStageChange(null)}
+          onConfirm={() => applyStageChange(stageChange)}
+        />
+      )}
+
+      {dropTarget && (
+        <DropFacilitatorModal
+          facilitatorName={
+            dropFacilitator
+              ? `${dropFacilitator.firstName} ${dropFacilitator.lastName}`
+              : "This facilitator"
+          }
+          sectionName={sectionsById.get(dropTarget.sectionId)?.name ?? "section"}
+          initialReason={dropTarget.dropReason}
+          onClose={() => setDropTarget(null)}
+          onConfirm={(reason) => {
+            patchPlacement(dropTarget.id, { dropped: true, dropReason: reason });
+            setDropTarget(null);
           }}
         />
       )}
@@ -268,227 +504,349 @@ export function EventDetailPage({
   );
 }
 
-function DropReasonModal({
-  facilitatorName,
-  initialNotes,
-  onClose,
-  onConfirm,
-}: {
-  facilitatorName: string;
-  initialNotes: string;
-  onClose: () => void;
-  onConfirm: (notes: string) => void;
-}) {
-  const [notes, setNotes] = useState(initialNotes);
-  const trimmed = notes.trim();
+/* ---- Pieces ---- */
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!trimmed) return;
-    onConfirm(trimmed);
-  }
+function Chip({
+  className,
+  children,
+}: {
+  className: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={classNames(
+        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function StaffingSummary({
+  staffing,
+}: {
+  staffing: ReturnType<typeof eventStaffing>;
+}) {
+  const pct =
+    staffing.seatsNeeded > 0
+      ? Math.min(100, (staffing.assigned / staffing.seatsNeeded) * 100)
+      : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <form
-        role="dialog"
-        aria-labelledby="drop-reason-title"
-        onSubmit={handleSubmit}
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-      >
-        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2
-              id="drop-reason-title"
-              className="text-base font-bold text-slate-900"
-            >
-              Mark as dropped
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Add a note explaining why {facilitatorName} is being dropped.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+    <div className="w-56 shrink-0">
+      <p className="text-sm text-slate-500">
+        {staffing.seatsNeeded > 0 ? (
+          <>
+            <span className="font-semibold text-slate-800">
+              {staffing.assigned} of {staffing.seatsNeeded}
+            </span>{" "}
+            seats filled
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-slate-800">
+              {staffing.assigned}
+            </span>{" "}
+            facilitators placed
+          </>
+        )}
+      </p>
+      {staffing.seatsNeeded > 0 && (
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div
+            className={classNames(
+              "h-full rounded-full transition-all",
+              staffing.openSeats === 0 ? "bg-emerald-500" : "bg-amber-400"
+            )}
+            style={{ width: `${pct}%` }}
+          />
         </div>
-
-        <div className="px-5 py-4">
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Drop reason <span className="text-rose-500">*</span>
-            </span>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              autoFocus
-              required
-              rows={4}
-              placeholder="e.g. Low enrollment — section cancelled; facilitator withdrew for medical reasons…"
-              className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-          </label>
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!trimmed}
-            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Drop facilitator
-          </button>
-        </div>
-      </form>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1">
+        {staffing.held > 0 && (
+          <Chip className={placementStageStyles.hold}>
+            {staffing.held} {PLACEMENT_STAGE_META.hold.short}
+          </Chip>
+        )}
+        {staffing.confirmed > 0 && (
+          <Chip className={placementStageStyles.confirmed}>
+            {staffing.confirmed} confirmed
+          </Chip>
+        )}
+        {staffing.dropped > 0 && (
+          <Chip className="bg-rose-50 text-rose-700 ring-rose-600/20">
+            {staffing.dropped} dropped
+          </Chip>
+        )}
+      </div>
     </div>
   );
 }
 
-function PlacementRow({
-  placement,
-  facilitator,
-  onToggle,
-  onNotesChange,
-  onRemove,
+function StageRail({
+  stage,
+  onSelect,
 }: {
-  placement: EventPlacement;
-  facilitator: Facilitator | null;
-  onToggle: (key: StatusKey) => void;
-  onNotesChange: (notes: string) => void;
-  onRemove: () => void;
+  stage: EventStage;
+  onSelect: (stage: EventStage) => void;
 }) {
-  const [notesOpen, setNotesOpen] = useState(Boolean(placement.notes));
-  const [notesDraft, setNotesDraft] = useState(placement.notes);
-  const src = useHeadshotSrc(
-    facilitator?.id ?? "",
-    facilitator?.hasStoredHeadshot,
-    facilitator?.headshot ?? ""
-  );
-  const dropped = placement.facilitatorDropped;
-  const name = facilitator
-    ? `${facilitator.firstName} ${facilitator.lastName}`
-    : "Unknown facilitator";
-
-  useEffect(() => {
-    setNotesDraft(placement.notes);
-  }, [placement.notes]);
-
-  useEffect(() => {
-    if (dropped && placement.notes.trim()) setNotesOpen(true);
-  }, [dropped, placement.notes]);
+  const currentIndex = EVENT_STAGES.indexOf(stage);
 
   return (
-    <li
+    <div className="mt-5 border-t border-slate-100 pt-4">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {EVENT_STAGES.map((s, i) => {
+          const isCurrent = i === currentIndex;
+          const isDone = i < currentIndex;
+          return (
+            <Fragment key={s}>
+              {i > 0 && (
+                <span
+                  className={classNames(
+                    "h-px w-4",
+                    i <= currentIndex ? "bg-brand-300" : "bg-slate-200"
+                  )}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isCurrent) onSelect(s);
+                }}
+                aria-current={isCurrent ? "step" : undefined}
+                title={EVENT_STAGE_META[s].description}
+                className={classNames(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  isCurrent
+                    ? "border-brand-600 bg-brand-600 text-white shadow-sm"
+                    : isDone
+                      ? "border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                )}
+              >
+                {EVENT_STAGE_META[s].short}
+              </button>
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NextStepBanner({
+  nextStep,
+  onRun,
+}: {
+  nextStep: ReturnType<typeof eventNextStep>;
+  onRun: () => void;
+}) {
+  const actionable = Boolean(nextStep.actionLabel);
+  return (
+    <div
       className={classNames(
-        "rounded-2xl border bg-white p-4 shadow-sm transition-colors",
-        dropped
-          ? "border-rose-200 bg-rose-50/40"
-          : "border-slate-200"
+        "mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3",
+        actionable
+          ? "border-brand-200 bg-brand-50/60"
+          : "border-slate-200 bg-slate-50"
       )}
     >
-      <div className="flex items-start gap-3">
-        <Avatar
-          src={src || undefined}
-          alt={name}
-          boxClassName="h-10 w-10 shrink-0 rounded-full bg-slate-100"
-          iconClassName="h-4.5 w-4.5"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p
-                className={classNames(
-                  "truncate text-sm font-semibold",
-                  dropped ? "text-slate-500 line-through" : "text-slate-900"
-                )}
-              >
-                {name}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-500">
-                <span className="font-medium text-slate-700">
-                  {placement.pathway || "—"}
-                </span>
+      <div className="min-w-0">
+        <p
+          className={classNames(
+            "text-sm font-semibold",
+            actionable ? "text-brand-800" : "text-slate-700"
+          )}
+        >
+          {nextStep.title}
+        </p>
+        <p className="mt-0.5 max-w-2xl text-sm text-slate-600">
+          {nextStep.detail}
+        </p>
+      </div>
+      {nextStep.actionLabel && (
+        <button
+          type="button"
+          onClick={onRun}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
+        >
+          {nextStep.actionLabel}
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PathwayRow({
+  event,
+  pathway,
+  facilitatorsById,
+  actions,
+  draggingId,
+  onDragStateChange,
+  onEditPathway,
+  onDeletePathway,
+  onAddSection,
+  onEditSection,
+  onDeleteSection,
+  onAssign,
+}: {
+  event: BookingEvent;
+  pathway: EventPathway;
+  facilitatorsById: Map<string, Facilitator>;
+  actions: PlacementActions;
+  draggingId: string | null;
+  onDragStateChange: (id: string | null) => void;
+  onEditPathway: () => void;
+  onDeletePathway: () => void;
+  onAddSection: () => void;
+  onEditSection: (section: EventSection) => void;
+  onDeleteSection: (section: EventSection) => void;
+  onAssign: (sectionId: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
+
+  const sections = sectionsForPathway(event, pathway.id);
+  const staffing = pathwayStaffing(event, pathway.id);
+
+  return (
+    <section>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-slate-900">
+            {pathway.name}
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {sections.length} {sections.length === 1 ? "section" : "sections"}
+            {" · "}
+            {staffing.seatsNeeded > 0
+              ? `${staffing.assigned} of ${staffing.seatsNeeded} seats filled`
+              : `${staffing.assigned} placed`}
+            {pathway.notes.trim() && (
+              <>
                 <span className="text-slate-300"> · </span>
-                {placement.section || "—"}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
+                {pathway.notes}
+              </>
+            )}
+          </p>
+        </div>
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            className={classNames(
+              "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
+              menuOpen
+                ? "bg-slate-100 text-slate-800"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            )}
+          >
+            Manage
+            <ChevronDown
+              className={classNames(
+                "h-4 w-4 transition-transform",
+                menuOpen && "rotate-180"
+              )}
+            />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
               <button
                 type="button"
-                onClick={() => setNotesOpen((v) => !v)}
-                className={classNames(
-                  "rounded-lg p-1.5 transition-colors",
-                  notesDraft || notesOpen
-                    ? "text-brand-600 hover:bg-brand-50"
-                    : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                )}
-                aria-label="Placement notes"
-                title="Placement notes"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onAddSection();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
               >
-                <StickyNote className="h-4 w-4" />
+                <Plus className="h-4 w-4" />
+                Add section
               </button>
               <button
                 type="button"
-                onClick={onRemove}
-                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
-                aria-label="Remove placement"
-                title="Remove placement"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onEditPathway();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit pathway
+              </button>
+              <div className="my-1 border-t border-slate-100" />
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDeletePathway();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50"
               >
                 <Trash2 className="h-4 w-4" />
+                Delete pathway
               </button>
             </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {STATUS_TOGGLES.map((t) => {
-              const on = placement[t.key];
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => onToggle(t.key)}
-                  className={classNames(
-                    "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors",
-                    on
-                      ? t.activeClass
-                      : t.danger
-                        ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  )}
-                >
-                  {on && <Check className="h-3 w-3" />}
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {notesOpen && (
-            <textarea
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              onBlur={() => {
-                if (notesDraft !== placement.notes) onNotesChange(notesDraft);
-              }}
-              placeholder="Placement notes / drop reason…"
-              rows={2}
-              className="mt-3 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
           )}
         </div>
       </div>
-    </li>
+
+      <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {sections.map((section) => (
+          <EventSectionCard
+            key={section.id}
+            event={event}
+            section={section}
+            facilitatorsById={facilitatorsById}
+            actions={actions}
+            draggingId={draggingId}
+            onDragStateChange={onDragStateChange}
+            onEdit={() => onEditSection(section)}
+            onDelete={() => onDeleteSection(section)}
+            onAssign={() => onAssign(section.id)}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={onAddSection}
+          className="flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-slate-300 bg-white/50 px-4 py-6 text-sm font-medium text-slate-400 transition-colors hover:border-brand-400 hover:bg-brand-50/40 hover:text-brand-700"
+        >
+          <Plus className="h-5 w-5" />
+          Add section
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function EmptyBoard({ onAddPathway }: { onAddPathway: () => void }) {
+  return (
+    <div className="mt-4 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-14 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+        <Layers className="h-6 w-6" />
+      </div>
+      <p className="mt-3 text-sm font-medium text-slate-700">
+        No pathways yet
+      </p>
+      <p className="mt-1 max-w-md text-sm text-slate-400">
+        Start by adding the pathways this event runs — like Math K-5 or
+        Leadership. Each pathway breaks into sections, and facilitators are
+        assigned to the sections they'll lead.
+      </p>
+      <button
+        type="button"
+        onClick={onAddPathway}
+        className="mt-4 flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
+      >
+        <Plus className="h-4 w-4" />
+        Add your first pathway
+      </button>
+    </div>
   );
 }

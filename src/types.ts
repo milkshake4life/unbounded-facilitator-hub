@@ -175,7 +175,7 @@ export const STANDARDS_INSTITUTE_LABELS: Record<
   no: "No",
 };
 
-/* ---- Events / placements (booking sheet) ---- */
+/* ---- Events / staffing board ---- */
 
 export type EventType =
   | "Executive Coaching"
@@ -188,18 +188,134 @@ export type EventType =
 export type EventMode = "In-Person" | "Virtual";
 
 /**
- * One facilitator assignment inside an event (a row on the booking sheet).
- * Pathway/section here are placement-specific, not directory capabilities.
+ * Where an event sits in the booking pipeline. Two gates drive facilitator
+ * outreach: holds go out once the booking is likely enough to secure people,
+ * and every hold turns into a confirm (plus a facilitator contract) once the
+ * client contract signs.
  */
+export type EventStage =
+  | "prospective"
+  | "likely"
+  | "contracted"
+  | "delivered";
+
+export const EVENT_STAGES: EventStage[] = [
+  "prospective",
+  "likely",
+  "contracted",
+  "delivered",
+];
+
+export const EVENT_STAGE_META: Record<
+  EventStage,
+  { label: string; short: string; description: string }
+> = {
+  prospective: {
+    label: "Prospective",
+    short: "Prospective",
+    description:
+      "Still being shaped. Plan pathways and sections, but hold off on facilitator outreach.",
+  },
+  likely: {
+    label: "Securing facilitators",
+    short: "Securing",
+    description:
+      "Likely enough to staff. Fill every open seat and send each facilitator a calendar HOLD.",
+  },
+  contracted: {
+    label: "Contract signed",
+    short: "Contracted",
+    description:
+      "Ask held facilitators to reconfirm availability, turn each HOLD into a CONFIRM, and request their contracts.",
+  },
+  delivered: {
+    label: "Delivered",
+    short: "Delivered",
+    description: "The event has run. Staffing is kept as history.",
+  },
+};
+
+/**
+ * How far along one facilitator is for the seat they hold. This mirrors the
+ * outreach sequence: ask availability, send a calendar HOLD, convert that hold
+ * to a CONFIRM once the client contract signs, then request their contract.
+ */
+export type PlacementStage =
+  | "proposed"
+  | "availability"
+  | "hold"
+  | "confirmed"
+  | "contracted";
+
+export const PLACEMENT_STAGES: PlacementStage[] = [
+  "proposed",
+  "availability",
+  "hold",
+  "confirmed",
+  "contracted",
+];
+
+export const PLACEMENT_STAGE_META: Record<
+  PlacementStage,
+  { label: string; short: string; description: string }
+> = {
+  proposed: {
+    label: "Proposed",
+    short: "Proposed",
+    description: "Penciled into this seat. Nothing has been sent yet.",
+  },
+  availability: {
+    label: "Availability asked",
+    short: "Asked",
+    description: "Availability email sent — waiting on their reply.",
+  },
+  hold: {
+    label: "Calendar HOLD",
+    short: "HOLD",
+    description: "Calendar hold sent so the date is protected.",
+  },
+  confirmed: {
+    label: "Confirmed",
+    short: "CONFIRM",
+    description:
+      "Reconfirmed after the contract signed — their hold is now a confirm.",
+  },
+  contracted: {
+    label: "Contract requested",
+    short: "Contract",
+    description: "Their facilitator contract has been requested.",
+  },
+};
+
+/** A strand of content inside an event, e.g. "Math K-5". */
+export interface EventPathway {
+  id: string;
+  name: string;
+  notes: string;
+}
+
+/** One deliverable slot inside a pathway, e.g. "Section 1" or "AM Section". */
+export interface EventSection {
+  id: string;
+  pathwayId: string;
+  name: string;
+  /** Facilitators this section needs. 0 means not decided yet. */
+  seatsNeeded: number;
+  /** Optional day this section runs (YYYY-MM-DD). */
+  date: string;
+  notes: string;
+}
+
+/** One facilitator filling one seat in one section. */
 export interface EventPlacement {
   id: string;
   facilitatorId: string;
-  pathway: string;
-  section: string;
-  facilitatorConfirmed: boolean;
-  facilitatorDropped: boolean;
-  calHoldSent: boolean;
-  contractRequested: boolean;
+  pathwayId: string;
+  sectionId: string;
+  stage: PlacementStage;
+  dropped: boolean;
+  /** Required explanation, captured whenever `dropped` is set. */
+  dropReason: string;
   notes: string;
 }
 
@@ -213,12 +329,15 @@ export interface BookingEvent {
   accountSchool: string;
   eventType: EventType;
   eventMode: EventMode;
-  /** Optional start date (YYYY-MM-DD). Parked until meaning is clarified. */
+  /** Optional start date (YYYY-MM-DD). */
   startDate: string;
-  /** True when the event itself is officially signed off / confirmed. */
-  eventConfirmed: boolean;
+  /** Optional end date (YYYY-MM-DD) for multi-day events. */
+  endDate: string;
+  stage: EventStage;
   /** Shared event-level notes (e.g. capacity). */
   notes: string;
+  pathways: EventPathway[];
+  sections: EventSection[];
   placements: EventPlacement[];
   status: FacilitatorStatus;
   createdByUid: string;
@@ -240,7 +359,7 @@ export const EVENT_TYPES: EventType[] = [
 
 export const EVENT_MODES: EventMode[] = ["In-Person", "Virtual"];
 
-/** Suggested placement pathways from the booking sheet (free text also allowed). */
+/** Suggested pathways from the booking sheet (free text also allowed). */
 export const PLACEMENT_PATHWAY_OPTIONS: string[] = [
   "ELA K-5",
   "ELA 6-12",

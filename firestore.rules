@@ -94,8 +94,9 @@ service cloud.firestore {
     match /events/{eventId} {
       function isValidEvent() {
         return request.resource.data.keys().hasOnly([
-            'id', 'accountSchool', 'eventType', 'eventMode', 'startDate',
-            'eventConfirmed', 'notes', 'placements', 'status',
+            'id', 'accountSchool', 'eventType', 'eventMode',
+            'startDate', 'endDate', 'stage',
+            'notes', 'pathways', 'sections', 'placements', 'status',
             'createdByUid', 'createdByEmail',
             'updatedByUid', 'updatedByEmail',
             'createdAt', 'updatedAt'
@@ -111,11 +112,19 @@ service cloud.firestore {
           && request.resource.data.eventMode in ['In-Person', 'Virtual']
           && request.resource.data.startDate is string
           && request.resource.data.startDate.size() <= 40
-          && request.resource.data.eventConfirmed is bool
+          && request.resource.data.endDate is string
+          && request.resource.data.endDate.size() <= 40
+          && request.resource.data.stage in [
+            'prospective', 'likely', 'contracted', 'delivered'
+          ]
           && request.resource.data.notes is string
           && request.resource.data.notes.size() <= 2000
+          && request.resource.data.pathways is list
+          && request.resource.data.pathways.size() <= 50
+          && request.resource.data.sections is list
+          && request.resource.data.sections.size() <= 200
           && request.resource.data.placements is list
-          && request.resource.data.placements.size() <= 200
+          && request.resource.data.placements.size() <= 500
           && request.resource.data.status in ['active', 'archived']
           && request.resource.data.createdByUid is string
           && request.resource.data.createdByEmail is string

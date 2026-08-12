@@ -27,21 +27,28 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
   const [eventMode, setEventMode] = useState<EventMode>(
     initial?.eventMode ?? "In-Person"
   );
+  const [startDate, setStartDate] = useState(initial?.startDate ?? "");
+  const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+
+  const datesOutOfOrder = Boolean(endDate && startDate && endDate < startDate);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = accountSchool.trim();
-    if (!trimmed) return;
+    if (!trimmed || datesOutOfOrder) return;
     const now = Date.now();
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
       accountSchool: trimmed,
       eventType,
       eventMode,
-      startDate: initial?.startDate ?? "",
-      eventConfirmed: initial?.eventConfirmed ?? false,
+      startDate,
+      endDate,
+      stage: initial?.stage ?? "prospective",
       notes: notes.trim(),
+      pathways: initial?.pathways ?? [],
+      sections: initial?.sections ?? [],
       placements: initial?.placements ?? [],
       status: initial?.status ?? "active",
       createdByUid: initial?.createdByUid ?? "",
@@ -158,6 +165,43 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
             </div>
           </fieldset>
 
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Start date{" "}
+                <span className="font-normal normal-case text-slate-400">
+                  (optional)
+                </span>
+              </span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                End date{" "}
+                <span className="font-normal normal-case text-slate-400">
+                  (optional)
+                </span>
+              </span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+          </div>
+          {datesOutOfOrder && (
+            <p className="-mt-2 text-xs font-medium text-rose-600">
+              The end date can't be before the start date.
+            </p>
+          )}
+
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Notes{" "}
@@ -185,7 +229,7 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
           </button>
           <button
             type="submit"
-            disabled={!accountSchool.trim()}
+            disabled={!accountSchool.trim() || datesOutOfOrder}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isEdit ? "Save" : "Create event"}

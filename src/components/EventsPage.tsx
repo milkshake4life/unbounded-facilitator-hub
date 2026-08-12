@@ -6,17 +6,21 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import type { BookingEvent, Facilitator } from "../types";
+import type { BookingEvent, EventStage, Facilitator } from "../types";
+import { EVENT_STAGES, EVENT_STAGE_META } from "../types";
 import { classNames } from "../lib/ui";
+import { eventStaffing } from "../lib/eventModel";
 import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { EventCard } from "./EventCard";
 
-type EventSortKey = "name" | "name_desc" | "recent";
+type EventSortKey = "name" | "name_desc" | "recent" | "date" | "open_seats";
 type EventStatusFilter = "active" | "archived" | "all";
 
 const sortLabels: Record<EventSortKey, string> = {
   name: "School (A–Z)",
   name_desc: "School (Z–A)",
+  date: "Event date",
+  open_seats: "Most open seats",
   recent: "Recently created",
 };
 
@@ -48,6 +52,7 @@ export function EventsPage({
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<EventSortKey>("name");
   const [statusFilter, setStatusFilter] = useState<EventStatusFilter>("active");
+  const [stageFilter, setStageFilter] = useState<EventStage[]>([]);
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -59,8 +64,9 @@ export function EventsPage({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = events.filter((ev) => {
-      if (statusFilter === "active") return ev.status !== "archived";
-      if (statusFilter === "archived") return ev.status === "archived";
+      if (statusFilter === "active" && ev.status === "archived") return false;
+      if (statusFilter === "archived" && ev.status !== "archived") return false;
+      if (stageFilter.length > 0 && !stageFilter.includes(ev.stage)) return false;
       return true;
     });
 
@@ -71,6 +77,7 @@ export function EventsPage({
           ev.eventType,
           ev.eventMode,
           ev.notes,
+          ...ev.pathways.map((p) => p.name),
         ]
           .join(" ")
           .toLowerCase();
@@ -84,13 +91,22 @@ export function EventsPage({
           return b.accountSchool.localeCompare(a.accountSchool);
         case "recent":
           return b.createdAt - a.createdAt;
+        case "date":
+          // Undated events sort last rather than leading with empty strings.
+          if (!a.startDate) return b.startDate ? 1 : 0;
+          if (!b.startDate) return -1;
+          return a.startDate.localeCompare(b.startDate);
+        case "open_seats":
+          return eventStaffing(b).openSeats - eventStaffing(a).openSeats;
         default:
           return a.accountSchool.localeCompare(b.accountSchool);
       }
     });
-  }, [events, query, sortKey, statusFilter]);
+  }, [events, query, sortKey, statusFilter, stageFilter]);
 
   const hasAnyEvents = events.length > 0;
+  const activeFilterCount =
+    (statusFilter !== "active" ? 1 : 0) + stageFilter.length;
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -152,36 +168,57 @@ export function EventsPage({
               }}
               className={classNames(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                statusFilter !== "active"
+                activeFilterCount > 0
                   ? "border-brand-600 bg-brand-50 text-brand-700"
                   : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
               )}
             >
               <SlidersHorizontal className="h-4 w-4" />
               Filter
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
             {filterOpen && (
-              <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-11 z-20 w-60 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                 <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Status
                 </p>
-                {(Object.keys(filterLabels) as EventStatusFilter[]).map(
-                  (k) => (
-                    <button
-                      key={k}
-                      onClick={() => {
-                        setStatusFilter(k);
-                        setFilterOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                    >
-                      {filterLabels[k]}
-                      {statusFilter === k && (
-                        <Check className="h-4 w-4 text-brand-600" />
-                      )}
-                    </button>
-                  )
-                )}
+                {(Object.keys(filterLabels) as EventStatusFilter[]).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => setStatusFilter(k)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    {filterLabels[k]}
+                    {statusFilter === k && (
+                      <Check className="h-4 w-4 text-brand-600" />
+                    )}
+                  </button>
+                ))}
+                <p className="mt-1 border-t border-slate-100 px-3 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Booking stage
+                </p>
+                {EVENT_STAGES.map((stage) => (
+                  <button
+                    key={stage}
+                    onClick={() =>
+                      setStageFilter((prev) =>
+                        prev.includes(stage)
+                          ? prev.filter((s) => s !== stage)
+                          : [...prev, stage]
+                      )
+                    }
+                    className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    {EVENT_STAGE_META[stage].label}
+                    {stageFilter.includes(stage) && (
+                      <Check className="h-4 w-4 text-brand-600" />
+                    )}
+                  </button>
+                ))}
               </div>
             )}
           </div>

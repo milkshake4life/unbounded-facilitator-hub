@@ -36,15 +36,14 @@ import { FacilitatorFilterPanel } from "./components/FacilitatorFilterPanel";
 import { TemplatesPage } from "./components/TemplatesPage";
 import { TemplateModal } from "./components/TemplateModal";
 import { EventsPage } from "./components/EventsPage";
+import { EventCard } from "./components/EventCard";
 import { EventDetailPage } from "./components/EventDetailPage";
 import { EventModal } from "./components/EventModal";
-import { AddPlacementModal } from "./components/AddPlacementModal";
 import { facilitators as seedData } from "./data/facilitators";
 import { seedTemplates } from "./data/templates";
 import type {
   BookingEvent,
   EmailTemplate,
-  EventPlacement,
   Facilitator,
   FacilitatorGroup,
 } from "./types";
@@ -146,8 +145,6 @@ export default function App() {
   const [eventModal, setEventModal] = useState<BookingEvent | "new" | null>(
     null
   );
-  const [addingPlacement, setAddingPlacement] = useState(false);
-
   // Persist to Firestore only when configured, signed in, and allowlisted.
   const persist = configured && !!user && access === "allowed";
 
@@ -209,6 +206,8 @@ export default function App() {
     () => events.find((e) => e.id === activeEventId) ?? null,
     [events, activeEventId]
   );
+  const activeEventStaffed =
+    activeEvent?.placements.filter((p) => !p.dropped).length ?? 0;
 
   // If the selected group was deleted elsewhere, clear the selection.
   useEffect(() => {
@@ -225,7 +224,8 @@ export default function App() {
       groups: groups.filter((g) => g.status !== "archived").length,
       archived:
         data.filter((f) => f.status === "archived").length +
-        groups.filter((g) => g.status === "archived").length,
+        groups.filter((g) => g.status === "archived").length +
+        events.filter((e) => e.status === "archived").length,
       events: events.filter((e) => e.status !== "archived").length,
       templates: templates.length,
     }),
@@ -255,6 +255,32 @@ export default function App() {
     }
     return list.slice().sort((a, b) => a.name.localeCompare(b.name));
   }, [groups, query]);
+
+  const archivedEvents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = events.filter((e) => e.status === "archived");
+    if (q) {
+      list = list.filter((e) => {
+        const haystack = [
+          e.accountSchool,
+          e.eventType,
+          e.eventMode,
+          e.notes,
+          ...e.pathways.map((p) => p.name),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    return list
+      .slice()
+      .sort((a, b) => a.accountSchool.localeCompare(b.accountSchool));
+  }, [events, query]);
+
+  /** Archived view stacks groups and events above the facilitator grid. */
+  const hasArchivedSections =
+    archivedGroups.length > 0 || archivedEvents.length > 0;
 
   const showingTemplates = section === "templates";
   const showingEvents = section === "events";
@@ -519,16 +545,29 @@ export default function App() {
       ...event,
       notes: event.notes ?? "",
       startDate: event.startDate ?? "",
-      eventConfirmed: Boolean(event.eventConfirmed),
+      endDate: event.endDate ?? "",
+      stage: event.stage ?? "prospective",
+      pathways: (event.pathways ?? []).map((p) => ({
+        id: p.id,
+        name: p.name ?? "",
+        notes: p.notes ?? "",
+      })),
+      sections: (event.sections ?? []).map((s) => ({
+        id: s.id,
+        pathwayId: s.pathwayId ?? "",
+        name: s.name ?? "",
+        seatsNeeded: Math.max(0, Math.round(s.seatsNeeded ?? 0)),
+        date: s.date ?? "",
+        notes: s.notes ?? "",
+      })),
       placements: (event.placements ?? []).map((p) => ({
         id: p.id,
         facilitatorId: p.facilitatorId,
-        pathway: p.pathway ?? "",
-        section: p.section ?? "",
-        facilitatorConfirmed: Boolean(p.facilitatorConfirmed),
-        facilitatorDropped: Boolean(p.facilitatorDropped),
-        calHoldSent: Boolean(p.calHoldSent),
-        contractRequested: Boolean(p.contractRequested),
+        pathwayId: p.pathwayId ?? "",
+        sectionId: p.sectionId ?? "",
+        stage: p.stage ?? "proposed",
+        dropped: Boolean(p.dropped),
+        dropReason: p.dropReason ?? "",
         notes: p.notes ?? "",
       })),
       status: event.status ?? "active",
@@ -597,16 +636,6 @@ export default function App() {
     persistEvent(event);
   }
 
-  function handleAddPlacement(placement: EventPlacement) {
-    if (!activeEvent) return;
-    persistEvent({
-      ...activeEvent,
-      placements: [...activeEvent.placements, placement],
-      updatedAt: Date.now(),
-    });
-    setAddingPlacement(false);
-  }
-
   function handleDeleteTemplate(template: EmailTemplate) {
     if (!window.confirm(`Delete template “${template.name}”?`)) return;
     if (persist) {
@@ -653,7 +682,6 @@ export default function App() {
           setSection(s);
           setActiveGroupId(null);
           setActiveEventId(null);
-          setAddingPlacement(false);
           resetPage();
         }}
         activeView={view}
@@ -688,10 +716,7 @@ export default function App() {
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        setActiveEventId(null);
-                        setAddingPlacement(false);
-                      }}
+                      onClick={() => setActiveEventId(null)}
                       className="text-slate-400 transition-colors hover:text-slate-700"
                     >
                       Events
@@ -768,7 +793,7 @@ export default function App() {
                     onClick={() => {
                       const ids = new Set(
                         activeEvent.placements
-                          .filter((p) => !p.facilitatorDropped)
+                          .filter((p) => !p.dropped)
                           .map((p) => p.facilitatorId)
                       );
                       setEmailModal({
@@ -779,11 +804,11 @@ export default function App() {
                         ),
                       });
                     }}
-                    disabled={activeEvent.placements.length === 0}
+                    disabled={activeEventStaffed === 0}
                     className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     title={
-                      activeEvent.placements.length === 0
-                        ? "Add facilitators before emailing the event"
+                      activeEventStaffed === 0
+                        ? "Assign facilitators before emailing the event"
                         : "Email facilitators placed at this event via Gmail"
                     }
                   >
@@ -791,13 +816,6 @@ export default function App() {
                     Email event
                   </button>
                 )}
-                <button
-                  onClick={() => setAddingPlacement(true)}
-                  className="flex items-center gap-2 rounded-lg border border-brand-600 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add facilitator
-                </button>
               </>
             )}
             {showingGroupDetail && activeGroup && (
@@ -877,7 +895,6 @@ export default function App() {
             event={activeEvent}
             facilitators={data}
             onUpdateEvent={handleUpdateEvent}
-            onAddPlacement={() => setAddingPlacement(true)}
           />
         ) : showingEventsList ? (
           <EventsPage
@@ -931,10 +948,22 @@ export default function App() {
                         {archivedGroups.length === 1 ? "group" : "groups"}
                       </>
                     )}
-                    {archivedGroups.length > 0 && filtered.length > 0 && (
+                    {archivedGroups.length > 0 &&
+                      (archivedEvents.length > 0 || filtered.length > 0) && (
+                        <span className="text-slate-300"> · </span>
+                      )}
+                    {archivedEvents.length > 0 && (
+                      <>
+                        <span className="font-semibold text-slate-700">
+                          {archivedEvents.length}
+                        </span>{" "}
+                        {archivedEvents.length === 1 ? "event" : "events"}
+                      </>
+                    )}
+                    {archivedEvents.length > 0 && filtered.length > 0 && (
                       <span className="text-slate-300"> · </span>
                     )}
-                    {(filtered.length > 0 || archivedGroups.length === 0) && (
+                    {(filtered.length > 0 || !hasArchivedSections) && (
                       <>
                         <span className="font-semibold text-slate-700">
                           {filtered.length}
@@ -1066,9 +1095,37 @@ export default function App() {
               </section>
             )}
 
-            {/* Facilitators section label (archived only, when mixed with groups) */}
+            {/* Archived: events section */}
+            {view === "archived" && archivedEvents.length > 0 && (
+              <section
+                className={archivedGroups.length > 0 ? "mt-8" : "mt-6"}
+              >
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Events
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {archivedEvents.map((e) => (
+                    <EventCard
+                      key={e.id}
+                      event={e}
+                      facilitators={activeFacilitators}
+                      onOpen={() => {
+                        setSection("events");
+                        setActiveEventId(e.id);
+                        resetPage();
+                      }}
+                      onEdit={() => setEventModal(e)}
+                      onArchive={() => handleArchiveEvent(e)}
+                      onDelete={() => handleDeleteEvent(e)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Facilitators section label (archived only, when mixed with other kinds) */}
             {view === "archived" &&
-              archivedGroups.length > 0 &&
+              hasArchivedSections &&
               (pageItems.length > 0 || filtered.length === 0) && (
                 <h2 className="mb-3 mt-8 text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Facilitators
@@ -1080,9 +1137,7 @@ export default function App() {
               <div
                 className={classNames(
                   "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-                  view === "archived" && archivedGroups.length > 0
-                    ? "mt-0"
-                    : "mt-5"
+                  view === "archived" && hasArchivedSections ? "mt-0" : "mt-5"
                 )}
               >
                 {pageItems.map((f) => (
@@ -1108,7 +1163,7 @@ export default function App() {
               <div
                 className={classNames(
                   "flex flex-col items-center justify-center text-center",
-                  view === "archived" && archivedGroups.length > 0
+                  view === "archived" && hasArchivedSections
                     ? "mt-8 py-8"
                     : "mt-16"
                 )}
@@ -1131,8 +1186,8 @@ export default function App() {
                   {showingGroupDetail
                     ? "Add facilitators to this group to see them here."
                     : view === "archived"
-                      ? archivedGroups.length > 0
-                        ? "Archived groups are listed above."
+                      ? hasArchivedSections
+                        ? "Archived groups and events are listed above."
                         : "Nothing in the archive yet."
                       : "Try adjusting your search or filters."}
                 </p>
@@ -1248,17 +1303,6 @@ export default function App() {
           initial={eventModal === "new" ? null : eventModal}
           onClose={() => setEventModal(null)}
           onSave={handleSaveEvent}
-        />
-      )}
-      {addingPlacement && activeEvent && (
-        <AddPlacementModal
-          eventName={activeEvent.accountSchool}
-          facilitators={activeFacilitators}
-          existingFacilitatorIds={activeEvent.placements.map(
-            (p) => p.facilitatorId
-          )}
-          onClose={() => setAddingPlacement(false)}
-          onAdd={handleAddPlacement}
         />
       )}
       {addToGroupFor && (
