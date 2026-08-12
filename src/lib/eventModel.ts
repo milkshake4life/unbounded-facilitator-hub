@@ -1,6 +1,5 @@
 import type {
   BookingEvent,
-  EventPathway,
   EventPlacement,
   EventSection,
   Facilitator,
@@ -8,7 +7,6 @@ import type {
   Pathway,
   PlacementStage,
 } from "../types";
-import { PLACEMENT_STAGES } from "../types";
 
 /* ---- Stage ordering ---- */
 
@@ -32,17 +30,7 @@ export function stageAtLeast(
   return stageRank(stage) >= stageRank(min);
 }
 
-export function nextPlacementStage(
-  stage: PlacementStage
-): PlacementStage | null {
-  return PLACEMENT_STAGES[stageRank(stage) + 1] ?? null;
-}
-
 /* ---- Factories ---- */
-
-export function createPathway(name: string, notes = ""): EventPathway {
-  return { id: crypto.randomUUID(), name, notes };
-}
 
 export function createSection(
   pathwayId: string,
@@ -104,7 +92,6 @@ export interface StaffingCounts {
   openSeats: number;
   held: number;
   confirmed: number;
-  contracted: number;
   dropped: number;
 }
 
@@ -116,7 +103,6 @@ function tally(placements: EventPlacement[], seatsNeeded: number): StaffingCount
     openSeats: Math.max(0, seatsNeeded - live.length),
     held: live.filter((p) => p.stage === "hold").length,
     confirmed: live.filter((p) => stageAtLeast(p.stage, "confirmed")).length,
-    contracted: live.filter((p) => p.stage === "contracted").length,
     dropped: placements.filter((p) => p.dropped).length,
   };
 }

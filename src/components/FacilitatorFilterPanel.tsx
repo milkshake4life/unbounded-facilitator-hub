@@ -1,10 +1,9 @@
 import { Check, X } from "lucide-react";
-import type { Pathway } from "../types";
+import { PATHWAYS, type Pathway } from "../types";
 import { classNames, pathwayShortLabels } from "../lib/ui";
 import {
   EMPTY_FACILITATOR_FILTERS,
   EVENT_FILTER_OPTIONS,
-  PATHWAYS,
   type EventFilter,
   type FacilitatorFilters,
   countActiveFilters,

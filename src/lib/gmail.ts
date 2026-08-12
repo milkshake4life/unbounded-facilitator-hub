@@ -37,7 +37,7 @@ let cachedToken: string | null = null;
  * Request an OAuth access token with the gmail.send scope.
  * Pass `forceConsent` to re-prompt (e.g. after a 401).
  */
-export async function getGmailAccessToken(
+async function getGmailAccessToken(
   forceConsent = false
 ): Promise<string> {
   if (!isGmailConfigured) {

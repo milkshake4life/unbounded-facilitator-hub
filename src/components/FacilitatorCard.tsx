@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   MoreHorizontal,
   Pencil,
@@ -12,6 +12,7 @@ import {
 import type { Facilitator } from "../types";
 import { classNames, pathwayShortLabels, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
+import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { Avatar } from "./Avatar";
 
 interface FacilitatorCardProps {
@@ -45,16 +46,7 @@ export function FacilitatorCard({
   const isArchived = facilitator.status === "archived";
   const inGroup = Boolean(onRemoveFromGroup);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [menuOpen]);
+  useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
 
   const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
   const headshotSrc = useHeadshotSrc(

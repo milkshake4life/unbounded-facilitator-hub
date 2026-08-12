@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   Upload,
@@ -81,6 +81,10 @@ import {
   deleteEvent,
 } from "./lib/eventsService";
 type SortKey = "name" | "name_desc" | "recent";
+
+/** One segment of the header trail. The last segment renders as the current
+ *  page; earlier ones are clickable when they can be navigated back to. */
+type Crumb = { label: string; onClick?: () => void };
 
 const PAGE_SIZE = 12;
 
@@ -284,19 +288,26 @@ export default function App() {
 
   const showingTemplates = section === "templates";
   const showingEvents = section === "events";
+  /** The archive drills into groups and events in place, so it keeps its own
+   *  detail state instead of handing off to the Groups or Events tab. */
+  const showingArchive = section === "directory" && view === "archived";
+  const showingArchiveList = showingArchive && !activeGroup && !activeEvent;
   /** Groups landing page (list) vs drilled into a single group. */
   const showingGroupsList =
     section === "directory" && view === "groups" && !activeGroup;
   const showingGroupDetail =
-    section === "directory" && view === "groups" && Boolean(activeGroup);
+    section === "directory" &&
+    (view === "groups" || view === "archived") &&
+    Boolean(activeGroup);
   const showingEventsList = showingEvents && !activeEvent;
-  const showingEventDetail = showingEvents && Boolean(activeEvent);
+  const showingEventDetail =
+    (showingEvents || showingArchive) && Boolean(activeEvent);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list: Facilitator[];
 
-    if (activeGroup && view === "groups") {
+    if (showingGroupDetail && activeGroup) {
       const memberIds = new Set(activeGroup.facilitatorIds);
       list = data.filter(
         (f) => memberIds.has(f.id) && f.status === "active"
@@ -344,7 +355,7 @@ export default function App() {
     });
 
     return list;
-  }, [data, view, query, filters, sortKey, activeGroup]);
+  }, [data, view, query, filters, sortKey, activeGroup, showingGroupDetail]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -653,6 +664,54 @@ export default function App() {
     return "All Facilitators";
   }
 
+  function breadcrumbTrail(): Crumb[] {
+    if (showingTemplates) return [{ label: "Templates" }];
+
+    if (showingEvents) {
+      if (!activeEvent) return [{ label: "Events" }];
+      return [
+        { label: "Events", onClick: () => setActiveEventId(null) },
+        { label: activeEvent.accountSchool },
+      ];
+    }
+
+    const directory: Crumb = { label: "Directory" };
+
+    if (showingArchive) {
+      const archive: Crumb = {
+        label: "Archived",
+        onClick: () => {
+          setActiveGroupId(null);
+          setActiveEventId(null);
+          resetPage();
+        },
+      };
+      if (activeEvent) {
+        return [directory, archive, { label: activeEvent.accountSchool }];
+      }
+      if (activeGroup) {
+        return [directory, archive, { label: activeGroup.name }];
+      }
+      return [directory, { label: "Archived" }];
+    }
+
+    if (showingGroupDetail && activeGroup) {
+      return [
+        directory,
+        {
+          label: "Groups",
+          onClick: () => {
+            setActiveGroupId(null);
+            resetPage();
+          },
+        },
+        { label: activeGroup.name },
+      ];
+    }
+
+    return [directory, { label: viewLabel() }];
+  }
+
   // Auth + allowlist gates when Firebase is configured.
   if (configured && (loading || (user && access === "loading"))) {
     return (
@@ -673,6 +732,13 @@ export default function App() {
       />
     );
   }
+
+  const crumbs = breadcrumbTrail();
+  const BreadcrumbIcon = showingTemplates
+    ? FileText
+    : showingEvents
+      ? CalendarDays
+      : Users;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -704,61 +770,32 @@ export default function App() {
         {/* Top header */}
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <div className="flex items-center gap-2 text-sm">
-            {showingTemplates ? (
-              <>
-                <FileText className="h-4 w-4 text-slate-400" />
-                <span className="font-semibold text-slate-800">Templates</span>
-              </>
-            ) : showingEvents ? (
-              <>
-                <CalendarDays className="h-4 w-4 text-slate-400" />
-                {showingEventDetail && activeEvent ? (
-                  <>
+            <BreadcrumbIcon className="h-4 w-4 text-slate-400" />
+            {crumbs.map((crumb, i) => {
+              const isCurrent = i === crumbs.length - 1;
+              return (
+                <Fragment key={`${i}-${crumb.label}`}>
+                  {i > 0 && (
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                  )}
+                  {isCurrent ? (
+                    <span className="font-semibold text-slate-800">
+                      {crumb.label}
+                    </span>
+                  ) : crumb.onClick ? (
                     <button
                       type="button"
-                      onClick={() => setActiveEventId(null)}
+                      onClick={crumb.onClick}
                       className="text-slate-400 transition-colors hover:text-slate-700"
                     >
-                      Events
+                      {crumb.label}
                     </button>
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
-                    <span className="font-semibold text-slate-800">
-                      {activeEvent.accountSchool}
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-semibold text-slate-800">Events</span>
-                )}
-              </>
-            ) : (
-              <>
-                <Users className="h-4 w-4 text-slate-400" />
-                <span className="text-slate-400">Directory</span>
-                <ChevronRight className="h-4 w-4 text-slate-300" />
-                {showingGroupDetail && activeGroup ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveGroupId(null);
-                        resetPage();
-                      }}
-                      className="text-slate-400 transition-colors hover:text-slate-700"
-                    >
-                      Groups
-                    </button>
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
-                    <span className="font-semibold text-slate-800">
-                      {activeGroup.name}
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-semibold text-slate-800">
-                    {viewLabel()}
-                  </span>
-                )}
-              </>
-            )}
+                  ) : (
+                    <span className="text-slate-400">{crumb.label}</span>
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
           <div className="flex items-center gap-3">
             {showingTemplates && (
@@ -938,7 +975,7 @@ export default function App() {
             {/* Toolbar */}
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-sm text-slate-500">
-                {view === "archived" ? (
+                {showingArchiveList ? (
                   <>
                     {archivedGroups.length > 0 && (
                       <>
@@ -1070,7 +1107,7 @@ export default function App() {
             </div>
 
             {/* Archived: groups section */}
-            {view === "archived" && archivedGroups.length > 0 && (
+            {showingArchiveList && archivedGroups.length > 0 && (
               <section className="mt-6">
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Groups
@@ -1082,7 +1119,6 @@ export default function App() {
                       group={g}
                       facilitators={activeFacilitators}
                       onOpen={() => {
-                        setView("groups");
                         setActiveGroupId(g.id);
                         resetPage();
                       }}
@@ -1096,7 +1132,7 @@ export default function App() {
             )}
 
             {/* Archived: events section */}
-            {view === "archived" && archivedEvents.length > 0 && (
+            {showingArchiveList && archivedEvents.length > 0 && (
               <section
                 className={archivedGroups.length > 0 ? "mt-8" : "mt-6"}
               >
@@ -1110,7 +1146,6 @@ export default function App() {
                       event={e}
                       facilitators={activeFacilitators}
                       onOpen={() => {
-                        setSection("events");
                         setActiveEventId(e.id);
                         resetPage();
                       }}
@@ -1124,7 +1159,7 @@ export default function App() {
             )}
 
             {/* Facilitators section label (archived only, when mixed with other kinds) */}
-            {view === "archived" &&
+            {showingArchiveList &&
               hasArchivedSections &&
               (pageItems.length > 0 || filtered.length === 0) && (
                 <h2 className="mb-3 mt-8 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1137,7 +1172,7 @@ export default function App() {
               <div
                 className={classNames(
                   "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-                  view === "archived" && hasArchivedSections ? "mt-0" : "mt-5"
+                  showingArchiveList && hasArchivedSections ? "mt-0" : "mt-5"
                 )}
               >
                 {pageItems.map((f) => (
@@ -1163,7 +1198,7 @@ export default function App() {
               <div
                 className={classNames(
                   "flex flex-col items-center justify-center text-center",
-                  view === "archived" && hasArchivedSections
+                  showingArchiveList && hasArchivedSections
                     ? "mt-8 py-8"
                     : "mt-16"
                 )}
@@ -1250,6 +1285,7 @@ export default function App() {
       {(editing || adding) && (
         <FacilitatorFormModal
           initial={editing}
+          programOptions={programOptions}
           onClose={() => {
             setEditing(null);
             setAdding(false);

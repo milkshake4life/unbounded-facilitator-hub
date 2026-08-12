@@ -17,11 +17,6 @@ export interface PickedGoogleFile {
   name: string;
 }
 
-interface PickedSpreadsheet {
-  id: string;
-  name: string;
-}
-
 export interface SheetData {
   spreadsheetId: string;
   spreadsheetName: string;
@@ -138,7 +133,7 @@ function openPicker(
 /** Open the Google Picker and resolve with the chosen spreadsheet (or null). */
 export async function pickSpreadsheet(
   token: string
-): Promise<PickedSpreadsheet | null> {
+): Promise<PickedGoogleFile | null> {
   await ensurePicker();
   return openPicker(token, {
     viewId: window.google!.picker.ViewId.SPREADSHEETS,
@@ -205,7 +200,7 @@ interface SheetsValuesResponse {
 /** Read the first tab of a spreadsheet into header + rows. */
 export async function readSheet(
   token: string,
-  spreadsheet: PickedSpreadsheet
+  spreadsheet: PickedGoogleFile
 ): Promise<SheetData> {
   const headers = { Authorization: `Bearer ${token}` };
 

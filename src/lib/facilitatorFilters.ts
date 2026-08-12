@@ -1,5 +1,4 @@
 import type { Facilitator, Pathway } from "../types";
-import { PATHWAYS } from "../types";
 import { regionForState, type Region } from "./regions";
 
 /** Past UnboundEd events a facilitator may have led. */
@@ -120,5 +119,3 @@ export function collectProgramOptions(list: Facilitator[]): string[] {
   }
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
-
-export { PATHWAYS };

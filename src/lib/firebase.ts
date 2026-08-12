@@ -33,6 +33,5 @@ if (isFirebaseConfigured) {
   dbInstance = getFirestore(appInstance);
 }
 
-export const app = appInstance;
 export const auth = authInstance;
 export const db = dbInstance;

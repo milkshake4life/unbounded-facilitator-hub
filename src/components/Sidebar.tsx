@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Users,
   ChevronDown,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { User } from "firebase/auth";
 import { classNames } from "../lib/ui";
+import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { Avatar } from "./Avatar";
 
 export type AppSection = "directory" | "events" | "templates";
@@ -48,23 +49,7 @@ export function Sidebar({
   const displayEmail = user?.email?.trim() || "Local sample data";
   const hasAccountMenu = Boolean(user && (onSignOut || onManageAccess));
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onPointerDown(e: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
+  useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-white">

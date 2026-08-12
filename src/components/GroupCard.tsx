@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -10,6 +10,7 @@ import {
 import type { Facilitator, FacilitatorGroup } from "../types";
 import { classNames } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
+import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { Avatar } from "./Avatar";
 
 function memberPreview(
@@ -47,16 +48,7 @@ export function GroupCard({
   const count = group.facilitatorIds.length;
   const extra = Math.max(0, count - preview.length);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [menuOpen]);
+  useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
 
   return (
     <div

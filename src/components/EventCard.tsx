@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -18,6 +18,7 @@ import {
 } from "../lib/eventStyles";
 import { eventStaffing } from "../lib/eventModel";
 import { useHeadshotSrc } from "../lib/useHeadshot";
+import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { Avatar } from "./Avatar";
 
 function placementPreview(
@@ -75,16 +76,7 @@ export function EventCard({
       ? Math.min(100, (staffing.assigned / staffing.seatsNeeded) * 100)
       : 0;
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [menuOpen]);
+  useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
 
   return (
     <div
