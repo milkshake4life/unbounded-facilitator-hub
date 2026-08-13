@@ -66,6 +66,9 @@ export const facilitators: Facilitator[] = [
   make({
     firstName: "Isabella",
     lastName: "Russo",
+    preferredName: "Bella",
+    pronouns: "she/her",
+    birthday: "1990-08-14",
     headshot: "https://randomuser.me/api/portraits/women/68.jpg",
     city: "Denver",
     state: "CO",
@@ -92,6 +95,8 @@ export const facilitators: Facilitator[] = [
   make({
     firstName: "Felipe",
     lastName: "Souza",
+    pronouns: "he/him/his",
+    birthday: "1988-08-12",
     headshot: "https://randomuser.me/api/portraits/men/32.jpg",
     city: "Houston",
     state: "TX",
@@ -116,6 +121,9 @@ export const facilitators: Facilitator[] = [
   make({
     firstName: "James",
     lastName: "Carter",
+    preferredName: "Jamie",
+    pronouns: "he/him",
+    birthday: "1985-08-22",
     headshot: "https://randomuser.me/api/portraits/men/75.jpg",
     city: "Seattle",
     state: "WA",
@@ -146,6 +154,8 @@ export const facilitators: Facilitator[] = [
   make({
     firstName: "Sofía",
     lastName: "Fernández",
+    pronouns: "she/her",
+    birthday: "1992-03-18",
     headshot: "https://randomuser.me/api/portraits/women/44.jpg",
     city: "Los Angeles",
     state: "CA",

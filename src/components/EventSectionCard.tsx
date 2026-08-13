@@ -20,6 +20,7 @@ import type {
 } from "../types";
 import { PLACEMENT_STAGES, PLACEMENT_STAGE_META } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import { placementStageStyles } from "../lib/eventStyles";
 import {
   placementsForSection,
@@ -302,9 +303,7 @@ function PlacementRow({
     facilitator?.hasStoredHeadshot,
     facilitator?.headshot ?? ""
   );
-  const name = facilitator
-    ? `${facilitator.firstName} ${facilitator.lastName}`
-    : "Unknown facilitator";
+  const name = facilitator ? displayName(facilitator) : "Unknown facilitator";
   const dropped = placement.dropped;
 
   useEffect(() => {

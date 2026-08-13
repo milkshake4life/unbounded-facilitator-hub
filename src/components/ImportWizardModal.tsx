@@ -42,6 +42,7 @@ import { compressImageToDataUrl } from "../lib/image";
 import { primeHeadshotCache } from "../lib/useHeadshot";
 import { isFirebaseConfigured } from "../lib/firebase";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import type { Facilitator } from "../types";
 
 type Step =
@@ -129,9 +130,7 @@ export function ImportWizardModal({ onClose }: ImportWizardModalProps) {
   const sortedFacilitators = useMemo(
     () =>
       [...importedFacilitators].sort((a, b) =>
-        `${a.firstName} ${a.lastName}`.localeCompare(
-          `${b.firstName} ${b.lastName}`
-        )
+        displayName(a).localeCompare(displayName(b))
       ),
     [importedFacilitators]
   );
@@ -553,7 +552,7 @@ export function ImportWizardModal({ onClose }: ImportWizardModalProps) {
                         {build.records.slice(0, 5).map((r) => (
                           <tr key={r.id} className="border-t border-slate-100">
                             <td className="px-3 py-2 text-slate-800">
-                              {r.firstName} {r.lastName}
+                              {displayName(r)}
                             </td>
                             <td className="px-3 py-2 text-slate-600">
                               {r.unboundedEmail || r.personalEmail || "—"}
@@ -1036,7 +1035,7 @@ function ReviewRow({
         {match.facilitatorId ? (
           <p className="text-xs font-medium text-emerald-600">
             Matched
-            {assigned ? `: ${assigned.firstName} ${assigned.lastName}` : ""}
+            {assigned ? `: ${displayName(assigned)}` : ""}
             {duplicate && (
               <span className="ml-1 text-amber-600">(duplicate)</span>
             )}
@@ -1056,7 +1055,7 @@ function ReviewRow({
         <option value="">— Skip —</option>
         {facilitators.map((f) => (
           <option key={f.id} value={f.id}>
-            {f.firstName} {f.lastName}
+            {displayName(f)}
           </option>
         ))}
       </select>

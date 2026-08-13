@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { EmailTemplate, Facilitator } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import {
   isGmailConfigured,
   partitionGroupRecipients,
@@ -28,6 +29,9 @@ interface GroupEmailModalProps {
   templates: EmailTemplate[];
   /** Signed-in user's email — used as From / To (copy). */
   senderEmail: string;
+  /** Optional draft to prefill the compose fields. */
+  initialSubject?: string;
+  initialBody?: string;
   onClose: () => void;
 }
 
@@ -43,6 +47,8 @@ export function GroupEmailModal({
   members,
   templates,
   senderEmail,
+  initialSubject = "",
+  initialBody = "",
   onClose,
 }: GroupEmailModalProps) {
   const { withEmail, withoutEmail } = useMemo(
@@ -53,8 +59,8 @@ export function GroupEmailModal({
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(withEmail.map((r) => r.facilitator.id))
   );
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [showSkipped, setShowSkipped] = useState(false);
@@ -433,7 +439,7 @@ function RecipientRow({
   checked: boolean;
   onToggle: () => void;
 }) {
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const fullName = displayName(facilitator);
   const headshotSrc = useHeadshotSrc(
     facilitator.id,
     facilitator.hasStoredHeadshot,
@@ -472,7 +478,7 @@ function RecipientRow({
 }
 
 function SkippedRow({ facilitator }: { facilitator: Facilitator }) {
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const fullName = displayName(facilitator);
   const headshotSrc = useHeadshotSrc(
     facilitator.id,
     facilitator.hasStoredHeadshot,

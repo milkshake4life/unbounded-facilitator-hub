@@ -20,6 +20,9 @@ import {
 export type ImportFieldKey =
   | "firstName"
   | "lastName"
+  | "preferredName"
+  | "pronouns"
+  | "birthday"
   | "unboundedEmail"
   | "personalEmail"
   | "cellPhone"
@@ -80,6 +83,9 @@ export interface ImportFieldDef {
 const FIELD_TO_FACILITATOR: Partial<Record<ImportFieldKey, keyof Facilitator>> = {
   firstName: "firstName",
   lastName: "lastName",
+  preferredName: "preferredName",
+  pronouns: "pronouns",
+  birthday: "birthday",
   unboundedEmail: "unboundedEmail",
   personalEmail: "personalEmail",
   cellPhone: "cellPhone",
@@ -121,6 +127,39 @@ const COMFORT_FIELD_BY_BAND: Record<GradeBand, ImportFieldKey> = {
 export const IMPORT_FIELDS: ImportFieldDef[] = [
   { key: "firstName", label: "First name", kind: "text", required: true, aliases: ["first name", "firstname", "first"] },
   { key: "lastName", label: "Last name", kind: "text", required: true, aliases: ["last name", "lastname", "last", "surname"] },
+  {
+    key: "preferredName",
+    label: "Preferred name",
+    kind: "text",
+    aliases: [
+      "preferred name",
+      "preferredname",
+      "preferred first name",
+      "goes by",
+      "nickname",
+      "what do you go by",
+      "name you go by",
+    ],
+  },
+  {
+    key: "pronouns",
+    label: "Pronouns",
+    kind: "text",
+    aliases: ["pronouns", "pronoun", "preferred pronouns"],
+  },
+  {
+    key: "birthday",
+    label: "Birthday",
+    kind: "text",
+    aliases: [
+      "birthday",
+      "birth day",
+      "birthdate",
+      "birth date",
+      "date of birth",
+      "dob",
+    ],
+  },
   { key: "unboundedEmail", label: "UnboundEd email", kind: "text", aliases: ["unbounded email", "unboundedemail", "work email", "org email"] },
   { key: "personalEmail", label: "Personal email", kind: "text", aliases: ["personal email", "email address", "email", "e-mail"] },
   { key: "cellPhone", label: "Cell phone", kind: "text", aliases: ["cell", "phone", "mobile", "cell phone", "telephone"] },
@@ -512,6 +551,48 @@ function toBoolean(value: string): boolean {
   return ["yes", "y", "true", "1", "x", "checked"].includes(t);
 }
 
+/**
+ * Normalize sheet/form birthday values to YYYY-MM-DD when possible.
+ * Accepts ISO dates, US-style M/D/YYYY, and month-day-only values.
+ */
+function toBirthday(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+
+  const us = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (us) {
+    const month = us[1].padStart(2, "0");
+    const day = us[2].padStart(2, "0");
+    let year = us[3];
+    if (year.length === 2) year = `20${year}`;
+    return `${year}-${month}-${day}`;
+  }
+
+  const md = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})$/);
+  if (md) {
+    // Month-day only — store with a placeholder year; alerts use month/day.
+    return `2000-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`;
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isNaN(parsed)) {
+    const d = new Date(parsed);
+    if (!Number.isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+  }
+
+  return raw;
+}
+
 function toShortNotice(value: string): ShortNotice {
   const t = norm(value);
   if (t.startsWith("y")) return "Yes";
@@ -591,10 +672,19 @@ export function buildFacilitators(
     const slug = `${firstName}.${lastName}`.toLowerCase().replace(/[^a-z0-9.]/g, "");
     const id = `imp-${slug || "row"}-${Math.random().toString(36).slice(2, 8)}`;
 
+    const preferredName =
+      mapping.preferredName >= 0 ? cell(row, mapping.preferredName) : "";
+    const pronouns = mapping.pronouns >= 0 ? cell(row, mapping.pronouns) : "";
+    const birthdayRaw = mapping.birthday >= 0 ? cell(row, mapping.birthday) : "";
+    const birthday = birthdayRaw ? toBirthday(birthdayRaw) : "";
+
     records.push({
       id,
       firstName,
       lastName,
+      preferredName: preferredName || undefined,
+      pronouns: pronouns || undefined,
+      birthday: birthday || undefined,
       unboundedEmail: cell(row, mapping.unboundedEmail),
       personalEmail: cell(row, mapping.personalEmail),
       streetAddress: cell(row, mapping.streetAddress),

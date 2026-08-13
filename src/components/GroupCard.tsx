@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { Facilitator, FacilitatorGroup } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { Avatar } from "./Avatar";
@@ -159,7 +160,7 @@ function MemberAvatar({ facilitator }: { facilitator: Facilitator }) {
   return (
     <Avatar
       src={src || undefined}
-      alt={`${facilitator.firstName} ${facilitator.lastName}`}
+      alt={displayName(facilitator)}
       boxClassName="h-8 w-8 rounded-full border-2 border-white bg-slate-100"
       iconClassName="h-3.5 w-3.5"
     />

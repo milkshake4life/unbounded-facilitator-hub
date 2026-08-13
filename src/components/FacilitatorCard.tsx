@@ -10,6 +10,10 @@ import {
   UserMinus,
 } from "lucide-react";
 import type { Facilitator } from "../types";
+import {
+  displayName,
+  displayNameWithPronouns,
+} from "../lib/facilitatorName";
 import { classNames, pathwayShortLabels, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { useOutsideDismiss } from "../lib/useOutsideDismiss";
@@ -48,7 +52,9 @@ export function FacilitatorCard({
 
   useOutsideDismiss(menuOpen, () => setMenuOpen(false), menuRef);
 
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const name = displayName(facilitator);
+  const nameWithPronouns = displayNameWithPronouns(facilitator);
+  const pronouns = facilitator.pronouns?.trim();
   const headshotSrc = useHeadshotSrc(
     facilitator.id,
     facilitator.hasStoredHeadshot,
@@ -148,14 +154,17 @@ export function FacilitatorCard({
       <div className="relative mb-3">
         <Avatar
           src={headshotSrc}
-          alt={fullName}
+          alt={nameWithPronouns}
           boxClassName="h-24 w-24 rounded-full ring-4 ring-slate-50"
           iconClassName="h-12 w-12"
         />
       </div>
 
-      {/* Name + employer */}
-      <h3 className="text-[15px] font-semibold text-slate-900">{fullName}</h3>
+      {/* Name + pronouns + employer */}
+      <h3 className="text-[15px] font-semibold text-slate-900">{name}</h3>
+      {pronouns && (
+        <p className="mt-0.5 text-xs text-slate-500">({pronouns})</p>
+      )}
       <p
         className={classNames(
           "mt-0.5 text-sm",

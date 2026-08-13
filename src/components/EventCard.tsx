@@ -10,6 +10,7 @@ import {
 import type { BookingEvent, Facilitator } from "../types";
 import { EVENT_STAGE_META } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import {
   eventModeStyles,
   eventStageStyles,
@@ -242,7 +243,7 @@ function MemberAvatar({ facilitator }: { facilitator: Facilitator }) {
   return (
     <Avatar
       src={src || undefined}
-      alt={`${facilitator.firstName} ${facilitator.lastName}`}
+      alt={displayName(facilitator)}
       boxClassName="h-8 w-8 rounded-full border-2 border-white bg-slate-100"
       iconClassName="h-3.5 w-3.5"
     />

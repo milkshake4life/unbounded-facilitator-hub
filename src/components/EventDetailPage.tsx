@@ -22,6 +22,7 @@ import {
   PLACEMENT_STAGE_META,
 } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import {
   eventModeStyles,
   eventTypeStyles,
@@ -205,7 +206,7 @@ export function EventDetailPage({
     remove: (placement) => {
       const facilitator = facilitatorsById.get(placement.facilitatorId);
       const name = facilitator
-        ? `${facilitator.firstName} ${facilitator.lastName}`
+        ? displayName(facilitator)
         : "this facilitator";
       if (!window.confirm(`Remove ${name} from this section?`)) return;
       update({
@@ -488,7 +489,7 @@ export function EventDetailPage({
         <DropFacilitatorModal
           facilitatorName={
             dropFacilitator
-              ? `${dropFacilitator.firstName} ${dropFacilitator.lastName}`
+              ? displayName(dropFacilitator)
               : "This facilitator"
           }
           sectionName={sectionsById.get(dropTarget.sectionId)?.name ?? "section"}

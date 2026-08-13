@@ -2,6 +2,7 @@
 // Kept separate from Sheets/Drive so those flows don't request mail permission.
 
 import type { Facilitator } from "../types";
+import { displayName } from "./facilitatorName";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 
@@ -95,12 +96,10 @@ export function partitionGroupRecipients(
     else withoutEmail.push(f);
   }
   withEmail.sort((a, b) =>
-    `${a.facilitator.firstName} ${a.facilitator.lastName}`.localeCompare(
-      `${b.facilitator.firstName} ${b.facilitator.lastName}`
-    )
+    displayName(a.facilitator).localeCompare(displayName(b.facilitator))
   );
   withoutEmail.sort((a, b) =>
-    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+    displayName(a).localeCompare(displayName(b))
   );
   return { withEmail, withoutEmail };
 }

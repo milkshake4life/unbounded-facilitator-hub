@@ -78,6 +78,18 @@ export interface Facilitator {
   // Personal & contact
   firstName: string;
   lastName: string;
+  /**
+   * What they go by day-to-day (e.g. "Bri" when firstName is "Brianne").
+   * When set, the directory and profile use this instead of firstName.
+   */
+  preferredName?: string;
+  /** e.g. "he/him/his", "she/her", "they/them" — shown next to their name. */
+  pronouns?: string;
+  /**
+   * Birthday as YYYY-MM-DD. Year is kept when known; upcoming-birthday alerts
+   * match on month/day only so they recur every year.
+   */
+  birthday?: string;
   unboundedEmail: string;
   personalEmail: string;
   streetAddress: string;

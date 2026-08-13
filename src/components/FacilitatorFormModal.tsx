@@ -31,10 +31,11 @@ interface FacilitatorFormModalProps {
   onSave: (f: Facilitator) => void;
 }
 
-/** Mirrors the tabs on the read-only profile so both views read the same way. */
-type TabId = "experience" | "professional" | "bio" | "contact";
+/** Mirrors the tabs on the read-only profile, plus Personal for identity fields. */
+type TabId = "personal" | "experience" | "professional" | "bio" | "contact";
 
 const TABS: { id: TabId; label: string }[] = [
+  { id: "personal", label: "Personal" },
   { id: "experience", label: "UnboundEd Experience" },
   { id: "professional", label: "Professional" },
   { id: "bio", label: "Biography" },
@@ -45,8 +46,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** A validation failure, plus the tab the offending field lives on. */
 interface FormError {
-  /** null when the field sits outside the tabs (the always-visible name row). */
-  tab: TabId | null;
+  tab: TabId;
   message: string;
 }
 
@@ -56,14 +56,19 @@ export function FacilitatorFormModal({
   onClose,
   onSave,
 }: FacilitatorFormModalProps) {
-  // A new record starts on contact details; an edit opens where the profile does.
-  const [tab, setTab] = useState<TabId>(initial ? "experience" : "contact");
+  // New records start on Personal; edits open on Experience like the profile.
+  const [tab, setTab] = useState<TabId>(initial ? "experience" : "personal");
   // Errors stay hidden until the first save attempt, then clear themselves as
   // soon as the offending field is corrected.
   const [showErrors, setShowErrors] = useState(false);
 
   const [firstName, setFirstName] = useState(initial?.firstName ?? "");
   const [lastName, setLastName] = useState(initial?.lastName ?? "");
+  const [preferredName, setPreferredName] = useState(
+    initial?.preferredName ?? ""
+  );
+  const [pronouns, setPronouns] = useState(initial?.pronouns ?? "");
+  const [birthday, setBirthday] = useState(initial?.birthday ?? "");
   const [unboundedEmail, setUnboundedEmail] = useState(
     initial?.unboundedEmail ?? ""
   );
@@ -177,7 +182,7 @@ export function FacilitatorFormModal({
    */
   function validate(): FormError | null {
     if (!firstName.trim() || !lastName.trim()) {
-      return { tab: null, message: "First and last name are required." };
+      return { tab: "personal", message: "First and last name are required." };
     }
     if (unboundedEmail.trim() && !EMAIL_PATTERN.test(unboundedEmail.trim())) {
       return { tab: "contact", message: "UnboundEd email is not a valid email address." };
@@ -196,7 +201,7 @@ export function FacilitatorFormModal({
 
     if (problem) {
       setShowErrors(true);
-      if (problem.tab) setTab(problem.tab);
+      setTab(problem.tab);
       return;
     }
 
@@ -212,6 +217,9 @@ export function FacilitatorFormModal({
       id: initial?.id ?? `f-${Date.now()}`,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      preferredName: preferredName.trim() || undefined,
+      pronouns: pronouns.trim() || undefined,
+      birthday: birthday.trim() || undefined,
       unboundedEmail: unboundedEmail.trim(),
       personalEmail: personalEmail.trim(),
       streetAddress: streetAddress.trim(),
@@ -266,7 +274,7 @@ export function FacilitatorFormModal({
         className="flex h-[640px] max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header — the name stays put so it is editable from any tab. */}
+        {/* Header */}
         <div className="shrink-0 border-b border-slate-100 px-6 pb-4 pt-5">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-900">
@@ -281,36 +289,17 @@ export function FacilitatorFormModal({
               <X className="h-5 w-5" />
             </button>
           </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-4">
-            <Field label="First name" required>
-              <input
-                required
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Last name" required>
-              <input
-                required
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-          </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex shrink-0 gap-1 border-b border-slate-100 px-4">
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-100 px-4">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={classNames(
-                "relative px-3 py-3 text-sm font-medium transition-colors",
+                "relative shrink-0 px-3 py-3 text-sm font-medium transition-colors",
                 tab === t.id
                   ? "text-brand-700"
                   : "text-slate-500 hover:text-slate-800"
@@ -326,6 +315,57 @@ export function FacilitatorFormModal({
 
         {/* Tab content */}
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {tab === "personal" && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="First name" required>
+                  <input
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Last name" required>
+                  <input
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Preferred name">
+                  <input
+                    value={preferredName}
+                    onChange={(e) => setPreferredName(e.target.value)}
+                    placeholder="What they go by day-to-day"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Pronouns">
+                  <input
+                    value={pronouns}
+                    onChange={(e) => setPronouns(e.target.value)}
+                    placeholder="e.g. she/her, he/him, they/them"
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Birthday">
+                <input
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </>
+          )}
+
           {tab === "experience" && (
             <>
               <Field label="Pathways">

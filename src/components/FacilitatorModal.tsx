@@ -21,9 +21,16 @@ import {
   Sparkles,
   Loader2,
   Wand2,
+  Cake,
 } from "lucide-react";
 import type { Facilitator, GradeBand } from "../types";
 import { COMFORT_LABELS, STANDARDS_INSTITUTE_LABELS } from "../types";
+import {
+  displayNameWithPronouns,
+  hasDistinctPreferredName,
+  legalName,
+} from "../lib/facilitatorName";
+import { formatBirthdayShort } from "../lib/birthdays";
 import { classNames, comfortStyles, pathwayStyles } from "../lib/ui";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { openAndDownloadResume } from "../lib/facilitatorsService";
@@ -54,7 +61,9 @@ export function FacilitatorModal({
   onUpdate,
 }: FacilitatorModalProps) {
   const [tab, setTab] = useState<TabId>("experience");
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const nameWithPronouns = displayNameWithPronouns(facilitator);
+  const showLegalName = hasDistinctPreferredName(facilitator);
+  const birthdayLabel = formatBirthdayShort(facilitator.birthday);
   const role = joinParts([facilitator.jobTitle, facilitator.currentEmployer]);
   const location = joinParts([facilitator.city, facilitator.state], ", ");
   const headshotSrc = useHeadshotSrc(
@@ -77,7 +86,7 @@ export function FacilitatorModal({
           <div className="flex items-start gap-4">
             <Avatar
               src={headshotSrc}
-              alt={fullName}
+              alt={nameWithPronouns}
               boxClassName="h-20 w-20 shrink-0 rounded-full ring-4 ring-slate-50"
               iconClassName="h-10 w-10"
             />
@@ -85,7 +94,7 @@ export function FacilitatorModal({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-xl font-bold text-slate-900">
-                  {fullName}
+                  {nameWithPronouns}
                 </h2>
                 {facilitator.status === "archived" && (
                   <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-white">
@@ -93,6 +102,17 @@ export function FacilitatorModal({
                   </span>
                 )}
               </div>
+              {showLegalName && (
+                <p className="mt-0.5 truncate text-xs text-slate-400">
+                  Legal name: {legalName(facilitator)}
+                </p>
+              )}
+              {birthdayLabel && (
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                  <Cake className="h-3.5 w-3.5" />
+                  Birthday {birthdayLabel}
+                </p>
+              )}
               <p
                 className={classNames(
                   "mt-0.5 truncate text-sm",

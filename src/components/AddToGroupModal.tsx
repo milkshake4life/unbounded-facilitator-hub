@@ -1,6 +1,7 @@
 import { Check, FolderOpen, X } from "lucide-react";
 import type { Facilitator, FacilitatorGroup } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 
 interface AddToGroupModalProps {
   facilitator: Facilitator;
@@ -16,7 +17,7 @@ export function AddToGroupModal({
   onClose,
   onToggle,
 }: AddToGroupModalProps) {
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const fullName = displayName(facilitator);
   const activeGroups = groups
     .filter((g) => g.status !== "archived")
     .slice()

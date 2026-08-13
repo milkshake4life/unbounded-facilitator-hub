@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Search, Sparkles, TriangleAlert } from "lucide-react";
 import type { Facilitator } from "../types";
 import { classNames } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import { matchFacilitator } from "../lib/eventModel";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { Avatar } from "./Avatar";
@@ -52,9 +53,7 @@ export function AssignFacilitatorModal({
       .map((f) => ({ facilitator: f, ...matchFacilitator(f, pathwayName) }))
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        return `${a.facilitator.firstName} ${a.facilitator.lastName}`.localeCompare(
-          `${b.facilitator.firstName} ${b.facilitator.lastName}`
-        );
+        return displayName(a.facilitator).localeCompare(displayName(b.facilitator));
       });
   }, [facilitators, alreadyInSection, pathwayName]);
 
@@ -69,7 +68,14 @@ export function AssignFacilitatorModal({
     if (q) {
       list = list.filter((c) => {
         const f = c.facilitator;
-        return [f.firstName, f.lastName, f.currentEmployer, f.jobTitle, ...f.pathways]
+        return [
+          f.firstName,
+          f.lastName,
+          f.preferredName ?? "",
+          f.currentEmployer,
+          f.jobTitle,
+          ...f.pathways,
+        ]
           .join(" ")
           .toLowerCase()
           .includes(q);
@@ -203,13 +209,13 @@ function CandidateRow({
     >
       <Avatar
         src={src || undefined}
-        alt={`${facilitator.firstName} ${facilitator.lastName}`}
+        alt={displayName(facilitator)}
         boxClassName="h-9 w-9 shrink-0 rounded-full bg-slate-100"
         iconClassName="h-4 w-4"
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-slate-800">
-          {facilitator.firstName} {facilitator.lastName}
+          {displayName(facilitator)}
         </p>
         <p className="truncate text-xs text-slate-500">
           {facilitator.currentEmployer || facilitator.jobTitle || "—"}

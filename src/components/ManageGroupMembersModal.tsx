@@ -12,6 +12,7 @@ import {
   pathwayShortLabels,
   pathwayStyles,
 } from "../lib/ui";
+import { displayName } from "../lib/facilitatorName";
 import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { useHeadshotSrc } from "../lib/useHeadshot";
 import { Avatar } from "./Avatar";
@@ -53,6 +54,7 @@ export function ManageGroupMembersModal({
         const haystack = [
           f.firstName,
           f.lastName,
+          f.preferredName ?? "",
           f.currentEmployer,
           f.jobTitle,
           ...f.pathways,
@@ -64,9 +66,7 @@ export function ManageGroupMembersModal({
     }
 
     return list.sort((a, b) =>
-      `${a.firstName} ${a.lastName}`.localeCompare(
-        `${b.firstName} ${b.lastName}`
-      )
+      displayName(a).localeCompare(displayName(b))
     );
   }, [facilitators, query, pathwayFilter]);
 
@@ -250,7 +250,7 @@ function MemberTile({
   selected: boolean;
   onToggle: () => void;
 }) {
-  const fullName = `${facilitator.firstName} ${facilitator.lastName}`;
+  const fullName = displayName(facilitator);
   const headshotSrc = useHeadshotSrc(
     facilitator.id,
     facilitator.hasStoredHeadshot,

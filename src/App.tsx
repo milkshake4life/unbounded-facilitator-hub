@@ -39,6 +39,7 @@ import { EventsPage } from "./components/EventsPage";
 import { EventCard } from "./components/EventCard";
 import { EventDetailPage } from "./components/EventDetailPage";
 import { EventModal } from "./components/EventModal";
+import { BirthdayAlertsWidget } from "./components/BirthdayAlertsWidget";
 import { facilitators as seedData } from "./data/facilitators";
 import { seedTemplates } from "./data/templates";
 import type {
@@ -48,6 +49,8 @@ import type {
   FacilitatorGroup,
 } from "./types";
 import { classNames } from "./lib/ui";
+import { displayName } from "./lib/facilitatorName";
+import { birthdayEmailDraft } from "./lib/birthdays";
 import { useOutsideDismiss } from "./lib/useOutsideDismiss";
 import {
   EMPTY_FACILITATOR_FILTERS,
@@ -141,6 +144,8 @@ export default function App() {
     name: string;
     title: string;
     members: Facilitator[];
+    initialSubject?: string;
+    initialBody?: string;
   } | null>(null);
   const [addToGroupFor, setAddToGroupFor] = useState<Facilitator | null>(null);
   const [templateModal, setTemplateModal] = useState<
@@ -327,6 +332,8 @@ export default function App() {
         const haystack = [
           f.firstName,
           f.lastName,
+          f.preferredName ?? "",
+          f.pronouns ?? "",
           f.currentEmployer,
           f.jobTitle,
           f.city,
@@ -342,15 +349,11 @@ export default function App() {
     list = [...list].sort((a, b) => {
       switch (sortKey) {
         case "name_desc":
-          return `${b.firstName} ${b.lastName}`.localeCompare(
-            `${a.firstName} ${a.lastName}`
-          );
+          return displayName(b).localeCompare(displayName(a));
         case "recent":
           return b.joinedDate.localeCompare(a.joinedDate);
         default:
-          return `${a.firstName} ${a.lastName}`.localeCompare(
-            `${b.firstName} ${b.lastName}`
-          );
+          return displayName(a).localeCompare(displayName(b));
       }
     });
 
@@ -399,7 +402,7 @@ export default function App() {
 
   function handleDelete(f: Facilitator) {
     if (
-      !window.confirm(`Remove ${f.firstName} ${f.lastName} from the directory?`)
+      !window.confirm(`Remove ${displayName(f)} from the directory?`)
     ) {
       return;
     }
@@ -972,6 +975,24 @@ export default function App() {
               />
             </div>
 
+            {view === "all" && !showingGroupDetail && (
+              <BirthdayAlertsWidget
+                facilitators={activeFacilitators}
+                emailEnabled={Boolean(user?.email)}
+                onEmail={(f, daysUntil) => {
+                  if (!user?.email) return;
+                  const draft = birthdayEmailDraft(f, daysUntil);
+                  setEmailModal({
+                    name: displayName(f),
+                    title: "Birthday email",
+                    members: [f],
+                    initialSubject: draft.subject,
+                    initialBody: draft.body,
+                  });
+                }}
+              />
+            )}
+
             {/* Toolbar */}
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-sm text-slate-500">
@@ -1324,6 +1345,8 @@ export default function App() {
           members={emailModal.members}
           templates={templates}
           senderEmail={user.email}
+          initialSubject={emailModal.initialSubject}
+          initialBody={emailModal.initialBody}
           onClose={() => setEmailModal(null)}
         />
       )}

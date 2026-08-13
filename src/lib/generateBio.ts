@@ -1,5 +1,6 @@
 import type { Facilitator } from "../types";
 import { COMFORT_LABELS, STANDARDS_INSTITUTE_LABELS } from "../types";
+import { displayFirstName, displayName } from "./facilitatorName";
 
 /** Model used for district-facing facilitator biographies. */
 const BIO_MODEL = "gemini-3.6-flash";
@@ -13,7 +14,7 @@ export function isBioAiConfigured(): boolean {
 }
 
 function buildPrompt(f: Facilitator): string {
-  const fullName = `${f.firstName} ${f.lastName}`.trim();
+  const fullName = displayName(f);
   const comfort = f.gradeBands
     .map((g) => {
       const c = f.comfortByGradeBand[g];
@@ -61,8 +62,8 @@ Return only the finished biography text.`;
 
 /** Deterministic fallback when no Gemini API key is configured (demo mode). */
 function templateBio(f: Facilitator): string {
-  const name = `${f.firstName} ${f.lastName}`.trim();
-  const first = name.split(" ")[0] || name;
+  const name = displayName(f);
+  const first = displayFirstName(f);
   const pathways =
     f.pathways.length > 0
       ? f.pathways.join(", ")
