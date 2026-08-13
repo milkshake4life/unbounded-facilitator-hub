@@ -20,6 +20,10 @@ import {
   STANDARDS_INSTITUTE_LABELS,
 } from "../types";
 import { classNames } from "../lib/ui";
+import {
+  facilitatorHasProgram,
+  normalizeProgramKey,
+} from "../lib/facilitatorFilters";
 import { inputClass } from "./ModalShell";
 
 interface FacilitatorFormModalProps {
@@ -141,14 +145,18 @@ export function FacilitatorFormModal({
   );
   const [bio, setBio] = useState(initial?.bio ?? "");
 
-  const programChoices = useMemo(
-    () =>
-      Array.from(new Set([...programOptions, ...otherPrograms]))
-        .map((p) => p.trim())
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b)),
-    [programOptions, otherPrograms]
-  );
+  const programChoices = useMemo(() => {
+    const known = programOptions.map((p) => p.trim()).filter(Boolean);
+    // Keep short custom tags as chips; drop long survey sentences.
+    const extras = otherPrograms.filter((p) => {
+      const trimmed = p.trim();
+      if (!trimmed || trimmed.length > 60 || /^i\b/i.test(trimmed)) return false;
+      return !known.some((k) => facilitatorHasProgram([trimmed], k));
+    });
+    return Array.from(new Set([...known, ...extras])).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [programOptions, otherPrograms]);
 
   function togglePathway(p: Pathway) {
     setPathways((prev) =>
@@ -163,9 +171,16 @@ export function FacilitatorFormModal({
   }
 
   function toggleProgram(p: string) {
-    setOtherPrograms((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-    );
+    setOtherPrograms((prev) => {
+      if (facilitatorHasProgram(prev, p)) {
+        const needle = normalizeProgramKey(p);
+        return prev.filter((x) => {
+          const hay = normalizeProgramKey(x);
+          return hay !== needle && !hay.includes(needle);
+        });
+      }
+      return [...prev, p];
+    });
   }
 
   function addProgram() {
@@ -477,7 +492,7 @@ export function FacilitatorFormModal({
                       key={p}
                       type="button"
                       onClick={() => toggleProgram(p)}
-                      className={chipClass(otherPrograms.includes(p))}
+                      className={chipClass(facilitatorHasProgram(otherPrograms, p))}
                     >
                       {p}
                     </button>

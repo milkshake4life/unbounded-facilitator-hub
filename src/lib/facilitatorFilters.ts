@@ -27,8 +27,8 @@ export const EVENT_FILTER_OPTIONS: {
 ];
 
 /**
- * Curated CORE / UnboundEd programs. Live data may include others — those are
- * merged in at filter time from facilitator records.
+ * Curated CORE / UnboundEd programs shown as filter/form chips.
+ * Free-text intake answers stay on the record but are not listed as facets.
  */
 export const KNOWN_PROGRAMS = [
   "OL&LA",
@@ -39,6 +39,33 @@ export const KNOWN_PROGRAMS = [
   "Math Leadership Collaborative (MLC)",
   "Math Identity Leadership Accelerator™ (MILA)",
 ] as const;
+
+/** Collapse case / punctuation / spacing so near-duplicates compare equal. */
+export function normalizeProgramKey(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[®™]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * True when a facilitator's program list includes `target`, including variants
+ * like "GLEAM® Inventory/ Learning Walks" and prose that names the program.
+ */
+export function facilitatorHasProgram(
+  programs: string[],
+  target: string
+): boolean {
+  const needle = normalizeProgramKey(target);
+  if (!needle) return false;
+  return programs.some((p) => {
+    const hay = normalizeProgramKey(p);
+    if (!hay) return false;
+    return hay === needle || hay.includes(needle);
+  });
+}
 
 export interface FacilitatorFilters {
   /** Empty = any pathway. */
@@ -97,7 +124,7 @@ export function matchesFacilitatorFilters(
   }
   if (
     filters.programs.length > 0 &&
-    !filters.programs.some((p) => f.otherPrograms.includes(p))
+    !filters.programs.some((p) => facilitatorHasProgram(f.otherPrograms, p))
   ) {
     return false;
   }
@@ -108,14 +135,10 @@ export function matchesFacilitatorFilters(
   return true;
 }
 
-/** Known programs plus any extras present in the current directory. */
-export function collectProgramOptions(list: Facilitator[]): string[] {
-  const set = new Set<string>(KNOWN_PROGRAMS);
-  for (const f of list) {
-    for (const p of f.otherPrograms) {
-      const trimmed = p.trim();
-      if (trimmed) set.add(trimmed);
-    }
-  }
-  return Array.from(set).sort((a, b) => a.localeCompare(b));
+/**
+ * Filter chips for programs. Only the curated list — unique survey sentences
+ * and near-duplicates from intake are excluded.
+ */
+export function collectProgramOptions(_list?: Facilitator[]): string[] {
+  return [...KNOWN_PROGRAMS].sort((a, b) => a.localeCompare(b));
 }

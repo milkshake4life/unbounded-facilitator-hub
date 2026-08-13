@@ -122,12 +122,28 @@ const REGION_BY_STATE_CODE: Record<string, Region> = Object.fromEntries(
   )
 );
 
+const STATE_CODE_TO_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_NAME_TO_CODE).map(([name, code]) => [code, name])
+);
+
 /** Normalize whatever is stored on the record into a postal code. */
 function toStateCode(state: string | undefined): string | null {
   const raw = state?.trim().toUpperCase();
   if (!raw) return null;
   if (REGION_BY_STATE_CODE[raw]) return raw;
   return STATE_NAME_TO_CODE[raw] ?? null;
+}
+
+/**
+ * Terms to include in search so "NY" and "New York" both match, regardless of
+ * whether the record stores a postal code or a full state name.
+ */
+export function stateSearchTerms(state: string | undefined): string {
+  const raw = state?.trim() ?? "";
+  const code = toStateCode(raw);
+  if (!code) return raw;
+  const name = STATE_CODE_TO_NAME[code] ?? "";
+  return [raw, code, name].filter(Boolean).join(" ");
 }
 
 /** The region a facilitator's state falls in, or null when unknown/blank. */

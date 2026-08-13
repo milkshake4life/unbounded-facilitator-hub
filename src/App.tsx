@@ -60,7 +60,7 @@ import {
   matchesFacilitatorFilters,
   type FacilitatorFilters,
 } from "./lib/facilitatorFilters";
-import { regionForState } from "./lib/regions";
+import { regionForState, stateSearchTerms } from "./lib/regions";
 import { useAuth } from "./lib/useAuth";
 import { useAccess } from "./lib/useAccess";
 import {
@@ -337,7 +337,7 @@ export default function App() {
           f.currentEmployer,
           f.jobTitle,
           f.city,
-          f.state,
+          stateSearchTerms(f.state),
           regionForState(f.state) ?? "",
         ]
           .join(" ")
