@@ -95,7 +95,7 @@ service cloud.firestore {
       function isValidEvent() {
         return request.resource.data.keys().hasOnly([
             'id', 'accountSchool', 'eventType', 'eventMode',
-            'startDate', 'endDate', 'stage',
+            'startDate', 'endDate', 'startTime', 'endTime', 'stage',
             'notes', 'pathways', 'sections', 'placements', 'status',
             'createdByUid', 'createdByEmail',
             'updatedByUid', 'updatedByEmail',
@@ -114,6 +114,10 @@ service cloud.firestore {
           && request.resource.data.startDate.size() <= 40
           && request.resource.data.endDate is string
           && request.resource.data.endDate.size() <= 40
+          && request.resource.data.startTime is string
+          && request.resource.data.startTime.size() <= 16
+          && request.resource.data.endTime is string
+          && request.resource.data.endTime.size() <= 16
           && request.resource.data.stage in [
             'prospective', 'likely', 'contracted', 'delivered'
           ]

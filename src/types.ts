@@ -329,6 +329,11 @@ export interface EventPlacement {
   /** Required explanation, captured whenever `dropped` is set. */
   dropReason: string;
   notes: string;
+  /**
+   * Google Calendar event id for the HOLD/CONFIRM invite on the sender's
+   * primary calendar. Empty until a hold (or confirm) invite is sent.
+   */
+  calendarEventId: string;
 }
 
 /**
@@ -341,10 +346,25 @@ export interface BookingEvent {
   accountSchool: string;
   eventType: EventType;
   eventMode: EventMode;
-  /** Optional start date (YYYY-MM-DD). */
+  /**
+   * Event start date (YYYY-MM-DD). Required before Google Calendar invites
+   * can be sent.
+   */
   startDate: string;
-  /** Optional end date (YYYY-MM-DD) for multi-day events. */
+  /**
+   * End date (YYYY-MM-DD) for multi-day events. Empty or equal to startDate
+   * means a single-day event (which also needs startTime/endTime).
+   */
   endDate: string;
+  /**
+   * Local start time (HH:mm) for single-day events. Unused for multi-day
+   * (those become all-day calendar blocks).
+   */
+  startTime: string;
+  /**
+   * Local end time (HH:mm) for single-day events. Must be after startTime.
+   */
+  endTime: string;
   stage: EventStage;
   /** Shared event-level notes (e.g. capacity). */
   notes: string;

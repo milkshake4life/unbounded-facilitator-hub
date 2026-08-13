@@ -15,6 +15,7 @@ import type {
   EventSection,
   EventStage,
   Facilitator,
+  PlacementStage,
 } from "../types";
 import {
   EVENT_STAGES,
@@ -33,6 +34,8 @@ import {
   createSection,
   eventNextStep,
   eventStaffing,
+  formatEventSchedule,
+  patchPlacements,
   pathwayStaffing,
   placementsForSection,
   sectionStaffing,
@@ -41,6 +44,10 @@ import {
   stageAtLeast,
   unassignedPlacements,
 } from "../lib/eventModel";
+import {
+  cancelCalendarInvite,
+  type CalendarInviteKind,
+} from "../lib/googleCalendar";
 import { useOutsideDismiss } from "../lib/useOutsideDismiss";
 import { EventSectionCard, type PlacementActions } from "./EventSectionCard";
 import { PathwayModal, type SectionPlan } from "./PathwayModal";
@@ -48,54 +55,34 @@ import { SectionModal } from "./SectionModal";
 import { AssignFacilitatorModal } from "./AssignFacilitatorModal";
 import { DropFacilitatorModal } from "./DropFacilitatorModal";
 import { StageChangeModal } from "./StageChangeModal";
+import { CalendarInviteModal } from "./CalendarInviteModal";
 
 interface EventDetailPageProps {
   event: BookingEvent;
   facilitators: Facilitator[];
   onUpdateEvent: (event: BookingEvent) => void;
+  onEditEvent: () => void;
 }
 
 type PathwayModalState = EventPathway | "new" | null;
 type SectionModalState = { pathwayId: string; section: EventSection | null } | null;
 type AssignTarget = { pathwayId: string; sectionId: string } | null;
 
-function parseDate(value: string): Date | null {
-  if (!value) return null;
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatDateRange(start: string, end: string): string | null {
-  const startDate = parseDate(start);
-  if (!startDate) return null;
-  const endDate = parseDate(end);
-
-  const dayMonth: Intl.DateTimeFormatOptions = { month: "long", day: "numeric" };
-  const full: Intl.DateTimeFormatOptions = { ...dayMonth, year: "numeric" };
-
-  if (!endDate || endDate.getTime() === startDate.getTime()) {
-    return startDate.toLocaleDateString(undefined, full);
-  }
-  // A range inside one month reads better as "June 12–14, 2026".
-  if (
-    startDate.getFullYear() === endDate.getFullYear() &&
-    startDate.getMonth() === endDate.getMonth()
-  ) {
-    return `${startDate.toLocaleDateString(undefined, dayMonth)}–${endDate.getDate()}, ${endDate.getFullYear()}`;
-  }
-  return `${startDate.toLocaleDateString(undefined, dayMonth)} – ${endDate.toLocaleDateString(undefined, full)}`;
-}
-
 export function EventDetailPage({
   event,
   facilitators,
   onUpdateEvent,
+  onEditEvent,
 }: EventDetailPageProps) {
   const [pathwayModal, setPathwayModal] = useState<PathwayModalState>(null);
   const [sectionModal, setSectionModal] = useState<SectionModalState>(null);
   const [assignTarget, setAssignTarget] = useState<AssignTarget>(null);
   const [dropTarget, setDropTarget] = useState<EventPlacement | null>(null);
   const [stageChange, setStageChange] = useState<EventStage | null>(null);
+  const [calendarInvite, setCalendarInvite] = useState<{
+    kind: CalendarInviteKind;
+    placements: EventPlacement[];
+  } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const facilitatorsById = useMemo(
@@ -114,7 +101,7 @@ export function EventDetailPage({
   const staffing = eventStaffing(event);
   const nextStep = eventNextStep(event);
   const orphans = unassignedPlacements(event);
-  const dateLabel = formatDateRange(event.startDate, event.endDate);
+  const dateLabel = formatEventSchedule(event);
 
   function update(patch: Partial<BookingEvent>) {
     onUpdateEvent({ ...event, ...patch, updatedAt: Date.now() });
@@ -199,7 +186,16 @@ export function EventDetailPage({
   }
 
   const placementActions: PlacementActions = {
-    setStage: (placement, stage) => patchPlacement(placement.id, { stage }),
+    setStage: (placement, stage) => {
+      if (stage === "hold" || stage === "confirmed") {
+        setCalendarInvite({
+          kind: stage === "hold" ? "hold" : "confirm",
+          placements: [placement],
+        });
+        return;
+      }
+      patchPlacement(placement.id, { stage });
+    },
     requestDrop: (placement) => setDropTarget(placement),
     restore: (placement) =>
       patchPlacement(placement.id, { dropped: false, dropReason: "" }),
@@ -209,6 +205,11 @@ export function EventDetailPage({
         ? displayName(facilitator)
         : "this facilitator";
       if (!window.confirm(`Remove ${name} from this section?`)) return;
+      if (placement.calendarEventId) {
+        cancelCalendarInvite(placement.calendarEventId).catch(() => {
+          /* best-effort — placement still removed locally */
+        });
+      }
       update({
         placements: event.placements.filter((p) => p.id !== placement.id),
       });
@@ -220,6 +221,29 @@ export function EventDetailPage({
       patchPlacement(placement.id, {
         sectionId: toSectionId,
         pathwayId: section.pathwayId,
+      });
+    },
+    cancelCalendarInvite: (placement) => {
+      if (!placement.calendarEventId) return;
+      const facilitator = facilitatorsById.get(placement.facilitatorId);
+      const name = facilitator
+        ? displayName(facilitator)
+        : "this facilitator";
+      if (
+        !window.confirm(
+          `Remove the Google Calendar invite for ${name}? They will get a cancellation notice.`
+        )
+      ) {
+        return;
+      }
+      const eventId = placement.calendarEventId;
+      patchPlacement(placement.id, { calendarEventId: "" });
+      cancelCalendarInvite(eventId).catch((err) => {
+        window.alert(
+          `Could not cancel the calendar invite: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`
+        );
       });
     },
   };
@@ -323,14 +347,33 @@ export function EventDetailPage({
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold text-slate-900">
-              {event.accountSchool}
-            </h1>
-            {dateLabel && (
+            <div className="flex flex-wrap items-start gap-2">
+              <h1 className="min-w-0 truncate text-xl font-bold text-slate-900">
+                {event.accountSchool}
+              </h1>
+              <button
+                type="button"
+                onClick={onEditEvent}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            </div>
+            {dateLabel ? (
               <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-slate-600">
                 <CalendarDays className="h-4 w-4 text-slate-400" />
                 {dateLabel}
               </p>
+            ) : (
+              <button
+                type="button"
+                onClick={onEditEvent}
+                className="mt-1 flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:underline"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Add schedule to enable calendar invites
+              </button>
             )}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               <Chip className={eventTypeStyles[event.eventType]}>
@@ -496,8 +539,43 @@ export function EventDetailPage({
           initialReason={dropTarget.dropReason}
           onClose={() => setDropTarget(null)}
           onConfirm={(reason) => {
-            patchPlacement(dropTarget.id, { dropped: true, dropReason: reason });
+            if (dropTarget.calendarEventId) {
+              cancelCalendarInvite(dropTarget.calendarEventId).catch(() => {
+                /* best-effort */
+              });
+            }
+            patchPlacement(dropTarget.id, {
+              dropped: true,
+              dropReason: reason,
+              calendarEventId: "",
+            });
             setDropTarget(null);
+          }}
+        />
+      )}
+
+      {calendarInvite && (
+        <CalendarInviteModal
+          event={event}
+          kind={calendarInvite.kind}
+          placements={calendarInvite.placements}
+          facilitatorsById={facilitatorsById}
+          onClose={() => setCalendarInvite(null)}
+          onEditSchedule={() => {
+            setCalendarInvite(null);
+            onEditEvent();
+          }}
+          onStatusOnly={(ids) => {
+            onUpdateEvent(
+              setPlacementStages(
+                event,
+                ids,
+                calendarInvite.kind === "hold" ? "hold" : "confirmed"
+              )
+            );
+          }}
+          onInvitesSent={(patches) => {
+            onUpdateEvent(patchPlacements(event, patches));
           }}
         />
       )}
@@ -536,8 +614,19 @@ function StaffingSummary({
       ? Math.min(100, (staffing.assigned / staffing.seatsNeeded) * 100)
       : 0;
 
+  const stageChips: Array<{
+    stage: PlacementStage;
+    count: number;
+  }> = [
+    { stage: "proposed", count: staffing.proposed },
+    { stage: "availability", count: staffing.availability },
+    { stage: "hold", count: staffing.held },
+    { stage: "confirmed", count: staffing.confirmedExact },
+    { stage: "contracted", count: staffing.contracted },
+  ];
+
   return (
-    <div className="w-56 shrink-0">
+    <div className="w-64 shrink-0">
       <p className="text-sm text-slate-500">
         {staffing.seatsNeeded > 0 ? (
           <>
@@ -567,15 +656,13 @@ function StaffingSummary({
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-1">
-        {staffing.held > 0 && (
-          <Chip className={placementStageStyles.hold}>
-            {staffing.held} {PLACEMENT_STAGE_META.hold.short}
-          </Chip>
-        )}
-        {staffing.confirmed > 0 && (
-          <Chip className={placementStageStyles.confirmed}>
-            {staffing.confirmed} confirmed
-          </Chip>
+        {stageChips.map(
+          ({ stage, count }) =>
+            count > 0 && (
+              <Chip key={stage} className={placementStageStyles[stage]}>
+                {count} {PLACEMENT_STAGE_META[stage].short}
+              </Chip>
+            )
         )}
         {staffing.dropped > 0 && (
           <Chip className="bg-rose-50 text-rose-700 ring-rose-600/20">

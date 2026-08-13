@@ -113,6 +113,7 @@ function migratePlacements(
       dropped,
       dropReason: str(raw.dropReason) || (dropped ? str(raw.notes) : ""),
       notes: str(raw.notes),
+      calendarEventId: str(raw.calendarEventId),
     };
 
     const sectionId = str(raw.sectionId);
@@ -186,6 +187,8 @@ function normalizeEvent(raw: RawEvent, fallbackId: string): BookingEvent {
     eventMode: raw.eventMode ?? "In-Person",
     startDate: str(raw.startDate),
     endDate: str(raw.endDate),
+    startTime: str(raw.startTime),
+    endTime: str(raw.endTime),
     stage,
     notes: str(raw.notes),
     pathways,

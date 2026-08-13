@@ -560,6 +560,8 @@ export default function App() {
       notes: event.notes ?? "",
       startDate: event.startDate ?? "",
       endDate: event.endDate ?? "",
+      startTime: event.startTime ?? "",
+      endTime: event.endTime ?? "",
       stage: event.stage ?? "prospective",
       pathways: (event.pathways ?? []).map((p) => ({
         id: p.id,
@@ -583,6 +585,7 @@ export default function App() {
         dropped: Boolean(p.dropped),
         dropReason: p.dropReason ?? "",
         notes: p.notes ?? "",
+        calendarEventId: p.calendarEventId ?? "",
       })),
       status: event.status ?? "active",
       createdByUid: isNew ? uid : event.createdByUid || uid,
@@ -935,6 +938,7 @@ export default function App() {
             event={activeEvent}
             facilitators={data}
             onUpdateEvent={handleUpdateEvent}
+            onEditEvent={() => setEventModal(activeEvent)}
           />
         ) : showingEventsList ? (
           <EventsPage

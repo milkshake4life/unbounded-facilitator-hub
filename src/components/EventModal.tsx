@@ -4,6 +4,7 @@ import type { BookingEvent, EventMode, EventType } from "../types";
 import { EVENT_MODES, EVENT_TYPES } from "../types";
 import { classNames } from "../lib/ui";
 import { eventTypeStyles, eventModeStyles } from "../lib/eventStyles";
+import { isMultiDayEvent } from "../lib/eventModel";
 
 interface EventModalProps {
   /** Null when creating a new event. */
@@ -13,7 +14,7 @@ interface EventModalProps {
 }
 
 /**
- * Create or edit an event shell — school, type, mode, optional notes.
+ * Create or edit an event shell — school, type, mode, schedule, optional notes.
  * Facilitator placements are managed after opening the event.
  */
 export function EventModal({ initial, onClose, onSave }: EventModalProps) {
@@ -29,14 +30,30 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
   );
   const [startDate, setStartDate] = useState(initial?.startDate ?? "");
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
+  const [startTime, setStartTime] = useState(initial?.startTime ?? "");
+  const [endTime, setEndTime] = useState(initial?.endTime ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
+  const multiDay = isMultiDayEvent({ startDate, endDate });
   const datesOutOfOrder = Boolean(endDate && startDate && endDate < startDate);
+  const timesOutOfOrder =
+    !multiDay && Boolean(startTime && endTime && endTime <= startTime);
+  const scheduleIncomplete = !startDate
+    ? true
+    : multiDay
+      ? false
+      : !startTime || !endTime;
+
+  const canSubmit =
+    Boolean(accountSchool.trim()) &&
+    !datesOutOfOrder &&
+    !timesOutOfOrder &&
+    !scheduleIncomplete;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = accountSchool.trim();
-    if (!trimmed || datesOutOfOrder) return;
+    if (!trimmed || !canSubmit) return;
     const now = Date.now();
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
@@ -44,7 +61,9 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
       eventType,
       eventMode,
       startDate,
-      endDate,
+      endDate: multiDay ? endDate : "",
+      startTime: multiDay ? "" : startTime,
+      endTime: multiDay ? "" : endTime,
       stage: initial?.stage ?? "prospective",
       notes: notes.trim(),
       pathways: initial?.pathways ?? [],
@@ -78,8 +97,8 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
             </h2>
             <p className="mt-0.5 text-sm text-slate-500">
               {isEdit
-                ? "Update the school, type, or mode for this event."
-                : "Start with the school and event details. Add facilitators after."}
+                ? "Update school, type, mode, or schedule for this event."
+                : "Set the school, schedule, and event details. Add facilitators after."}
             </p>
           </div>
           <button
@@ -92,7 +111,7 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-5 py-4">
+        <div className="flex max-h-[min(70vh,560px)] flex-col gap-4 overflow-y-auto px-5 py-4">
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Account | School
@@ -165,42 +184,88 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
             </div>
           </fieldset>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Start date{" "}
-                <span className="font-normal normal-case text-slate-400">
-                  (optional)
-                </span>
-              </span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                End date{" "}
-                <span className="font-normal normal-case text-slate-400">
-                  (optional)
-                </span>
-              </span>
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-          </div>
-          {datesOutOfOrder && (
-            <p className="-mt-2 text-xs font-medium text-rose-600">
-              The end date can't be before the start date.
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Schedule
             </p>
-          )}
+            <p className="mb-2 text-xs text-slate-500">
+              Required for Google Calendar holds and confirms. One-day events
+              need times; multi-day events become all-day blocks.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-600">
+                  Start date
+                </span>
+                <input
+                  type="date"
+                  value={startDate}
+                  required
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-600">
+                  End date{" "}
+                  <span className="font-normal text-slate-400">
+                    (multi-day)
+                  </span>
+                </span>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              </label>
+            </div>
+            {datesOutOfOrder && (
+              <p className="mt-1.5 text-xs font-medium text-rose-600">
+                The end date can't be before the start date.
+              </p>
+            )}
+            {!multiDay && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Start time
+                  </span>
+                  <input
+                    type="time"
+                    value={startTime}
+                    required
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-slate-600">
+                    End time
+                  </span>
+                  <input
+                    type="time"
+                    value={endTime}
+                    required
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  />
+                </label>
+              </div>
+            )}
+            {multiDay && (
+              <p className="mt-2 text-xs text-slate-500">
+                Multi-day schedule — calendar invites will be all-day from start
+                through end date.
+              </p>
+            )}
+            {timesOutOfOrder && (
+              <p className="mt-1.5 text-xs font-medium text-rose-600">
+                End time must be after start time.
+              </p>
+            )}
+          </div>
 
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -229,7 +294,7 @@ export function EventModal({ initial, onClose, onSave }: EventModalProps) {
           </button>
           <button
             type="submit"
-            disabled={!accountSchool.trim() || datesOutOfOrder}
+            disabled={!canSubmit}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isEdit ? "Save" : "Create event"}

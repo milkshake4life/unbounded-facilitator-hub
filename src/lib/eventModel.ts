@@ -58,6 +58,7 @@ export function createPlacement(
     dropped: false,
     dropReason: "",
     notes,
+    calendarEventId: "",
   };
 }
 
@@ -90,7 +91,14 @@ export interface StaffingCounts {
   /** Placements that still count toward the seat, i.e. not dropped. */
   assigned: number;
   openSeats: number;
+  /** Exact stage counts among live (non-dropped) placements. */
+  proposed: number;
+  availability: number;
   held: number;
+  /** Exact `confirmed` stage only (not contracted). */
+  confirmedExact: number;
+  contracted: number;
+  /** Confirmed or further (confirmed + contracted) — used on list cards. */
   confirmed: number;
   dropped: number;
 }
@@ -101,7 +109,11 @@ function tally(placements: EventPlacement[], seatsNeeded: number): StaffingCount
     seatsNeeded,
     assigned: live.length,
     openSeats: Math.max(0, seatsNeeded - live.length),
+    proposed: live.filter((p) => p.stage === "proposed").length,
+    availability: live.filter((p) => p.stage === "availability").length,
     held: live.filter((p) => p.stage === "hold").length,
+    confirmedExact: live.filter((p) => p.stage === "confirmed").length,
+    contracted: live.filter((p) => p.stage === "contracted").length,
     confirmed: live.filter((p) => stageAtLeast(p.stage, "confirmed")).length,
     dropped: placements.filter((p) => p.dropped).length,
   };
@@ -148,6 +160,107 @@ export function setPlacementStages(
     ),
     updatedAt: Date.now(),
   };
+}
+
+/** Patch specific placements by id (e.g. after calendar invites succeed). */
+export function patchPlacements(
+  event: BookingEvent,
+  patches: Array<{ id: string; patch: Partial<EventPlacement> }>
+): BookingEvent {
+  const byId = new Map(patches.map((p) => [p.id, p.patch]));
+  return {
+    ...event,
+    placements: event.placements.map((p) => {
+      const patch = byId.get(p.id);
+      return patch ? { ...p, ...patch } : p;
+    }),
+    updatedAt: Date.now(),
+  };
+}
+
+/* ---- Event schedule (required for Google Calendar invites) ---- */
+
+/** True when the event spans more than one calendar day. */
+export function isMultiDayEvent(
+  event: Pick<BookingEvent, "startDate" | "endDate">
+): boolean {
+  return Boolean(
+    event.startDate && event.endDate && event.endDate > event.startDate
+  );
+}
+
+/**
+ * Why calendar invites cannot be sent yet, or null when the schedule is ready.
+ * Single-day events need a start date + start/end times; multi-day need start
+ * and end dates (invites are all-day across that range).
+ */
+export function scheduleGapReason(
+  event: Pick<BookingEvent, "startDate" | "endDate" | "startTime" | "endTime">
+): string | null {
+  if (!event.startDate) {
+    return "Set the event date (and time) before sending calendar invites.";
+  }
+  if (isMultiDayEvent(event)) return null;
+  if (!event.startTime || !event.endTime) {
+    return "One-day events need a start and end time before sending calendar invites.";
+  }
+  if (event.endTime <= event.startTime) {
+    return "End time must be after start time.";
+  }
+  return null;
+}
+
+export function eventScheduleReady(
+  event: Pick<BookingEvent, "startDate" | "endDate" | "startTime" | "endTime">
+): boolean {
+  return scheduleGapReason(event) === null;
+}
+
+/** Human-readable schedule for headers and invite modals. */
+export function formatEventSchedule(
+  event: Pick<BookingEvent, "startDate" | "endDate" | "startTime" | "endTime">
+): string | null {
+  if (!event.startDate) return null;
+
+  const parseDay = (value: string): Date | null => {
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const start = parseDay(event.startDate);
+  if (!start) return null;
+
+  const dayMonth: Intl.DateTimeFormatOptions = { month: "long", day: "numeric" };
+  const full: Intl.DateTimeFormatOptions = { ...dayMonth, year: "numeric" };
+
+  const formatTime = (hhmm: string): string => {
+    const [h, m] = hhmm.split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  if (isMultiDayEvent(event)) {
+    const end = parseDay(event.endDate);
+    if (!end) return start.toLocaleDateString(undefined, full);
+    if (
+      start.getFullYear() === end.getFullYear() &&
+      start.getMonth() === end.getMonth()
+    ) {
+      return `${start.toLocaleDateString(undefined, dayMonth)}–${end.getDate()}, ${end.getFullYear()} (all day)`;
+    }
+    return `${start.toLocaleDateString(undefined, dayMonth)} – ${end.toLocaleDateString(undefined, full)} (all day)`;
+  }
+
+  const dayLabel = start.toLocaleDateString(undefined, full);
+  if (event.startTime && event.endTime) {
+    return `${dayLabel} · ${formatTime(event.startTime)}–${formatTime(event.endTime)}`;
+  }
+  return dayLabel;
 }
 
 /* ---- Suggested next step ---- */

@@ -18,6 +18,7 @@ free-tier friendly.
 | **Firestore** | Stores facilitators, headshots, and allowlisted users |
 | **Google Sheets / Drive APIs** | Import from a sheet + match headshots/resumes from Drive folders |
 | **Gmail API** | Email everyone in a facilitator group from your Google account |
+| **Google Calendar API** | Send HOLD / CONFIRM invites from event staffing |
 | **`.env.local`** | Local keys (git-ignored) so the app can talk to Firebase/Google |
 
 > A Firebase project *is* a Google Cloud project — it's all one project.
@@ -102,7 +103,7 @@ If you prefer not to use bootstrap, manually create a document in Firestore:
 
 ---
 
-## Step 2 — Enable Google Sheets, Picker, Drive & Gmail APIs
+## Step 2 — Enable Google Sheets, Picker, Drive, Gmail & Calendar APIs
 
 Open the Google Cloud console for the **same** project
 (<https://console.cloud.google.com> → pick your Firebase project at the top):
@@ -113,6 +114,7 @@ Open the Google Cloud console for the **same** project
    - **Google Picker API** — the file/folder chooser in the browser
    - **Google Drive API** — listing + downloading headshots and resumes
    - **Gmail API** — sending group emails from your Google account
+   - **Google Calendar API** — sending HOLD / CONFIRM invites from event staffing
 
 ---
 
@@ -125,9 +127,10 @@ Open the Google Cloud console for the **same** project
    **External** and add yourself as a test user.
 3. Fill in app name + support email and save.
 4. Under **Scopes**, you do **not** need to pre-register scopes for this app —
-   the browser requests Sheets/Drive/Gmail scopes at runtime when you import or
-   email a group. The first time you use **Email group**, Google will ask for
-   permission to send email as you (`gmail.send`).
+   the browser requests Sheets/Drive/Gmail/Calendar scopes at runtime when you
+   import, email a group, or send calendar holds. The first time you use
+   **Email group**, Google asks for `gmail.send`; the first calendar HOLD asks
+   for `calendar.events`.
 
 ### OAuth Client ID (Sheets / Drive token)
 1. **APIs & Services → Credentials → Create credentials → OAuth client ID**.
@@ -209,6 +212,36 @@ Once the **Gmail API** from Step 2 is enabled:
 
 If send fails with “Gmail API isn’t enabled”, go back to Step 2 and enable it,
 then wait a minute and try again.
+
+---
+
+## Step 5c — Calendar HOLD / CONFIRM (events)
+
+Once the **Google Calendar API** from Step 2 is enabled:
+
+1. Create or edit an event with a definitive schedule:
+   - **One-day:** start date + start/end times
+   - **Multi-day:** start and end dates (invites are all-day across that range)
+2. Staff the event (pathways → sections → facilitators). When you set a
+   facilitator’s stage to **Calendar HOLD**, confirm whether to send a
+   `GCAL HOLD · {Account | School}` invite from **your** primary calendar.
+3. When you move them to **Confirmed**, confirm updating that invite to
+   `GCAL CONFIRM · {Account | School}`. Use **Remove calendar invite** on the
+   facilitator’s row (calendar-off icon next to notes) to cancel an invite
+   without dropping them.
+
+You can choose **Status only** in the popup to update the stage without
+touching Google Calendar (e.g. if you already sent an invite elsewhere).
+
+The first send opens a Google consent prompt for Calendar. Approve it. Invite
+ids are stored on each placement so confirms update the original HOLD rather
+than creating a duplicate.
+
+If send fails with “Calendar API isn’t enabled”, go back to Step 2 and enable
+**Google Calendar API**, wait a minute, and try again.
+
+**Firestore rules:** re-publish `firestore.rules` after pulling so `startTime` /
+`endTime` are allowed on event documents.
 
 ### Shared email templates
 
