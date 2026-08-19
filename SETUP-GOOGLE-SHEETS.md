@@ -7,6 +7,11 @@ loading.
 You only need to do this setup once. It takes ~15 minutes. Everything below is
 free-tier friendly.
 
+> **Deploying live or moving off a personal Google account?** Start with
+> [`HANDOFF-AND-DEPLOYMENT.md`](./HANDOFF-AND-DEPLOYMENT.md) — it covers
+> migration, team access, Firestore rules, and Vercel in plain language. Use
+> *this* guide for the detailed API and import steps.
+
 ---
 
 ## What you'll end up with
@@ -32,6 +37,11 @@ free-tier friendly.
 | `allowedUsers/{email}` | Who can sign in and use the app |
 | `groups/{id}` | Personal facilitator groups (owner-only) |
 | `emailTemplates/{id}` | Shared team email templates (all allowlisted users) |
+| `events/{id}` | Booking events, pathways, sections, and staffing placements |
+
+> **Moving off a personal account or deploying live?** See
+> [`HANDOFF-AND-DEPLOYMENT.md`](./HANDOFF-AND-DEPLOYMENT.md) for migration,
+> allowlist, rules, and Vercel steps written for non-technical admins.
 
 ---
 
@@ -137,7 +147,9 @@ Open the Google Cloud console for the **same** project
 2. Application type: **Web application**.
 3. Under **Authorized JavaScript origins**, add:
    - `http://localhost:5173`
-   - (later, add your deployed URL too)
+   - Your Vercel URL, e.g. `https://your-project.vercel.app` (see
+     [`HANDOFF-AND-DEPLOYMENT.md`](./HANDOFF-AND-DEPLOYMENT.md) Part 4)
+   - Any custom domain you use
 4. Create → copy the **Client ID**. → `VITE_GOOGLE_CLIENT_ID`
 
 ### API key (for the Picker)
@@ -153,7 +165,9 @@ Open the Google Cloud console for the **same** project
    ```bash
    cp .env.example .env.local
    ```
-2. Fill in every value in `.env.local`:
+2. Fill in every value in `.env.local` (for local dev) or in **Vercel →
+   Environment Variables** (for the live site — see
+   [`HANDOFF-AND-DEPLOYMENT.md`](./HANDOFF-AND-DEPLOYMENT.md)):
 
    | Variable | Where it comes from |
    |---|---|
